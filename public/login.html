@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الإجازات - تسجيل الدخول</title>
+    <script src="/lang.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        #loginHero {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background: linear-gradient(135deg, #B22234 0%, #E8511A 100%);
+            background-size: cover;
+            background-position: center;
+        }
+        #loginHero.has-hero::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.38);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .lang-fab {
+            position: fixed;
+            top: 14px;
+            z-index: 20;
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.95);
+            color: #1a3a5c;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+        }
+        html[dir="rtl"] .lang-fab { right: 14px; left: auto; }
+        html[dir="ltr"] .lang-fab { left: 14px; right: auto; }
+
+        .login-container {
+            position: relative;
+            z-index: 1;
+            background: white;
+            border-radius: 16px;
+            padding: 50px 40px;
+            width: 400px;
+            max-width: 94vw;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        .logo-area {
+            margin-bottom: 30px;
+        }
+
+        .logo-placeholder {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #B22234, #E8511A);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 40px;
+        }
+
+        #siteLogo {
+            display: none;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin: 0 auto 15px;
+            border: 3px solid #f0f0f0;
+        }
+
+        .logo-area h2 {
+            color: #1a3a5c;
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .logo-area p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+        html[dir="ltr"] .form-group {
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+            direction: ltr;
+        }
+        html[dir="rtl"] .form-group input {
+            text-align: right;
+        }
+        html[dir="ltr"] .form-group input {
+            text-align: left;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #E8511A;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #1a3a5c, #2d6a9f);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: opacity 0.3s;
+            margin-top: 10px;
+        }
+
+        .btn-login:hover { opacity: 0.9; }
+
+        .error-msg {
+            background: #fee;
+            color: #c00;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div id="loginHero" aria-hidden="true"></div>
+<button type="button" class="lang-fab" id="langBtn" onclick="toggleLoginLang()">English</button>
+<div class="login-container">
+    <div class="logo-area">
+        <img id="siteLogo" alt="" />
+        <div class="logo-placeholder" id="logoFallback">🏢</div>
+        <h2 id="mainTitle">مركز الاتصال</h2>
+        <p id="subTitle">نظام إدارة الإجازات السنوية</p>
+    </div>
+
+    <div class="form-group">
+        <label id="lblEmp" for="employee_id">رقم الموظف</label>
+        <input type="text" id="employee_id" placeholder="أدخل رقم الموظف" autocomplete="username" />
+    </div>
+
+    <div class="form-group">
+        <label id="lblPwd" for="password">كلمة المرور</label>
+        <input type="password" id="password" placeholder="أدخل كلمة المرور" autocomplete="current-password" />
+    </div>
+
+    <button type="button" class="btn-login" id="btnLogin" onclick="login()">تسجيل الدخول</button>
+
+    <div class="error-msg" id="errorMsg"></div>
+</div>
+
+<script>
+    let brandCache = null;
+
+    function applyLoginLang() {
+        const L = UI_LANG.get();
+        UI_LANG.set(L);
+        document.getElementById('lblEmp').textContent = UI_LANG.t('login', 'empLabel');
+        document.getElementById('lblPwd').textContent = UI_LANG.t('login', 'pwdLabel');
+        document.getElementById('employee_id').placeholder = UI_LANG.t('login', 'empPh');
+        document.getElementById('password').placeholder = UI_LANG.t('login', 'pwdPh');
+        document.getElementById('btnLogin').textContent = UI_LANG.t('login', 'btn');
+        document.getElementById('langBtn').textContent = UI_LANG.t('login', 'langBtn');
+        applyTitlesFromCache();
+    }
+
+    function applyTitlesFromCache() {
+        if (!brandCache || !brandCache.success) return;
+        const lang = UI_LANG.get();
+        const title = lang === 'ar' ? (brandCache.title_ar || '') : (brandCache.title_en || '');
+        const sub = lang === 'ar' ? (brandCache.subtitle_ar || '') : (brandCache.subtitle_en || '');
+        if (title) document.getElementById('mainTitle').textContent = title;
+        if (sub) document.getElementById('subTitle').textContent = sub;
+    }
+
+    function toggleLoginLang() {
+        UI_LANG.set(UI_LANG.get() === 'ar' ? 'en' : 'ar');
+        applyLoginLang();
+    }
+
+    async function loadBranding() {
+        try {
+            const r = await fetch('/auth/branding');
+            brandCache = await r.json();
+            if (!brandCache.success) return;
+            const hero = document.getElementById('loginHero');
+            if (brandCache.login_hero) {
+                hero.style.backgroundImage = 'url("' + brandCache.login_hero.replace(/"/g, '') + '")';
+                hero.classList.add('has-hero');
+            } else {
+                hero.style.backgroundImage = '';
+                hero.classList.remove('has-hero');
+            }
+            const img = document.getElementById('siteLogo');
+            const fb = document.getElementById('logoFallback');
+            if (brandCache.site_logo) {
+                img.src = brandCache.site_logo;
+                img.style.display = 'block';
+                fb.style.display = 'none';
+            } else {
+                img.style.display = 'none';
+                fb.style.display = 'flex';
+            }
+            applyTitlesFromCache();
+        } catch (e) {}
+    }
+
+    document.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') login();
+    });
+
+    applyLoginLang();
+    loadBranding();
+
+    async function login() {
+        const employee_id = document.getElementById('employee_id').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const errorMsg = document.getElementById('errorMsg');
+
+        if (!employee_id || !password) {
+            errorMsg.style.display = 'block';
+            errorMsg.textContent = UI_LANG.t('login', 'errCred');
+            return;
+        }
+
+        try {
+            const response = await fetch('/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ employee_id, password })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.location.href = data.redirect;
+            } else {
+                errorMsg.style.display = 'block';
+                errorMsg.textContent = data.message;
+            }
+        } catch (err) {
+            errorMsg.style.display = 'block';
+            errorMsg.textContent = UI_LANG.t('login', 'errNet');
+        }
+    }
+</script>
+</body>
+</html>

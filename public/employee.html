@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بوابة الموظف</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f5f5f5;color:#333;direction:rtl;}
+        .header{background:linear-gradient(135deg,#8B0000,#B22234);color:white;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,0.3);}
+        .header h2{font-size:16px;}
+        .header-right{display:flex;align-items:center;gap:8px;position:relative;}
+        .btn{padding:8px 16px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;transition:all 0.2s;}
+        .btn-primary{background:#B22234;color:white;}.btn-primary:hover{background:#8B0000;}
+        .btn-success{background:#27ae60;color:white;}.btn-success:hover{background:#1e8449;}
+        .btn-warning{background:#f39c12;color:white;}.btn-warning:hover{background:#d68910;}
+        .btn-danger{background:#e74c3c;color:white;}.btn-danger:hover{background:#c0392b;}
+        .btn-info{background:#3498db;color:white;}.btn-info:hover{background:#2980b9;}
+        .btn-sm{padding:5px 10px;font-size:11px;}
+        .btn-outline{background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);color:white;padding:6px 13px;}
+        .btn-outline:hover{background:rgba(255,255,255,0.3);}
+        .tabs{display:flex;background:white;border-bottom:2px solid #eee;overflow-x:auto;}
+        .tab{padding:11px 15px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;font-size:13px;color:#666;transition:all 0.2s;}
+        .tab.active{border-bottom-color:#B22234;color:#B22234;font-weight:600;}
+        .tab:hover{background:#fafafa;}
+        .section{display:none;padding:16px;}
+        .section.active{display:block;}
+        .card{background:white;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:14px;}
+        .card-title{font-size:14px;font-weight:600;color:#B22234;margin-bottom:12px;border-bottom:2px solid #fde8ea;padding-bottom:6px;}
+        .form-group{margin-bottom:11px;}
+        .form-group label{display:block;font-size:12px;color:#555;margin-bottom:4px;font-weight:500;}
+        .form-control{width:100%;padding:8px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;font-family:inherit;transition:border 0.2s;}
+        .form-control:focus{outline:none;border-color:#B22234;}
+        .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+        .alert{padding:9px 13px;border-radius:7px;font-size:13px;margin-top:8px;display:none;}
+        .alert-success{background:#d4edda;color:#155724;border:1px solid #c3e6cb;}
+        .alert-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
+        .alert-info{background:#d1ecf1;color:#0c5460;border:1px solid #bee5eb;}
+        .alert-warning{background:#fff3cd;color:#856404;border:1px solid #ffc107;}
+        .badge{display:inline-block;padding:3px 9px;border-radius:11px;font-size:11px;font-weight:600;}
+        .badge-success{background:#d4edda;color:#155724;}
+        .badge-danger{background:#f8d7da;color:#721c24;}
+        .badge-warning{background:#fff3cd;color:#856404;}
+        .badge-info{background:#d1ecf1;color:#0c5460;}
+        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px;}
+        .stat-card{background:white;border-radius:10px;padding:14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-top:4px solid #B22234;}
+        .stat-card .num{font-size:24px;font-weight:700;color:#B22234;}
+        .stat-card .lbl{font-size:11px;color:#888;margin-top:3px;}
+        .notif-btn{background:rgba(255,255,255,0.2);border:none;color:white;width:34px;height:34px;border-radius:50%;font-size:17px;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;}
+        .notif-badge{position:absolute;top:-3px;right:-3px;background:#ffd700;color:#333;border-radius:50%;width:17px;height:17px;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:700;}
+        .notif-dropdown{position:absolute;top:50px;left:0;background:white;border-radius:12px;box-shadow:0 8px 25px rgba(0,0,0,0.15);width:290px;max-height:320px;overflow-y:auto;display:none;z-index:200;}
+        .notif-dropdown.open{display:block;}
+        .notif-item{padding:9px 13px;border-bottom:1px solid #f0f0f0;font-size:12px;color:#333;}
+        .notif-item.unread{background:#fff5f5;border-right:3px solid #B22234;}
+        .notif-time{font-size:10px;color:#aaa;margin-top:2px;}
+        table{width:100%;border-collapse:collapse;font-size:13px;}
+        th{background:#f8f0f1;color:#B22234;padding:9px;text-align:right;font-weight:600;border-bottom:2px solid #e0c0c2;}
+        td{padding:8px 9px;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+        tr:hover td{background:#fdf8f8;}
+
+        /* === شبكة الأشهر === */
+        .months-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+        .month-card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+        .month-header{background:linear-gradient(135deg,#8B0000,#B22234);color:white;padding:9px 12px;text-align:center;}
+        .month-name-ar{font-size:14px;font-weight:700;}
+        .month-name-sub{font-size:10px;opacity:0.85;margin-top:1px;}
+        .weeks-row{display:flex;padding:10px;gap:6px;}
+        .week-slot{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+        .week-label{font-size:10px;color:#888;font-weight:600;}
+        .week-check{width:34px;height:34px;border-radius:8px;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;background:white;font-size:16px;}
+        .week-check:hover{border-color:#B22234;background:#fde8ea;}
+        .week-check.registered{background:#B22234;border-color:#B22234;color:white;}
+        .week-check.registered::after{content:'✓';font-size:16px;font-weight:700;color:white;}
+        .week-check.blocked-week{background:#ffebee;border-color:#ffcdd2;cursor:not-allowed;}
+        .week-check.blocked-week::after{content:'🚫';font-size:13px;}
+        .week-lock{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#1a1a1a;font-size:18px;cursor:pointer;transition:all 0.2s;}
+        .week-lock.unlocked{background:#27ae60;}
+        .week-lock.registered-w4{background:#B22234;}
+        .week-req-btn{font-size:9px;background:#f39c12;color:white;border:none;border-radius:4px;padding:2px 5px;cursor:pointer;margin-top:1px;font-family:inherit;transition:background 0.2s;white-space:nowrap;}
+        .week-req-btn:hover{background:#d68910;}
+        .week-req-sent{font-size:9px;color:#27ae60;font-weight:600;}
+
+        /* === تحليل الإجازات === */
+        .analysis-section{background:#f8f9fa;border-radius:10px;padding:14px;margin-top:12px;}
+        .analysis-title{font-size:13px;font-weight:700;color:#B22234;margin-bottom:10px;}
+        .timeline{position:relative;padding-right:16px;}
+        .timeline::before{content:'';position:absolute;right:5px;top:0;bottom:0;width:2px;background:#e0c0c2;}
+        .tl-item{position:relative;margin-bottom:14px;padding-right:14px;}
+        .tl-dot{position:absolute;right:-10px;top:4px;width:10px;height:10px;border-radius:50%;background:#B22234;border:2px solid white;box-shadow:0 0 0 2px #B22234;}
+        .tl-dot.occasion-dot{background:#3498db;box-shadow:0 0 0 2px #3498db;}
+        .tl-content{background:white;border-radius:8px;padding:9px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);}
+        .tl-title{font-size:12px;font-weight:700;color:#333;}
+        .tl-date{font-size:11px;color:#888;margin-top:1px;}
+        .tl-gap{font-size:11px;color:#e74c3c;font-weight:600;margin-top:3px;padding:3px 7px;background:#fde8ea;border-radius:4px;display:inline-block;}
+        .tl-gap.before{color:#27ae60;background:#d4edda;}
+        .tl-gap.close{color:#f39c12;background:#fff3cd;}
+
+        /* === التقويم === */
+        .calendar-year{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;}
+        .cal-month{background:white;border-radius:10px;padding:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+        .cal-month-title{text-align:center;font-weight:700;color:#B22234;padding:5px 0;margin-bottom:6px;border-bottom:2px solid #fde8ea;font-size:12px;}
+        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:10px;}
+        .cal-grid .dh{text-align:center;padding:3px 1px;color:#999;font-weight:600;font-size:9px;}
+        .cal-grid .dc{text-align:center;padding:3px 1px;border-radius:3px;}
+        .cal-grid .dc.empty{color:transparent;}
+        .cal-grid .dc.my-leave{background:#B22234;color:white;font-weight:700;border-radius:3px;}
+        .cal-grid .dc.occasion-day{font-weight:600;}
+        .cal-grid .dc.weekend{color:#3498db;}
+
+        /* === مودال === */
+        .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;}
+        .modal-overlay.open{display:flex;}
+        .modal{background:white;border-radius:14px;padding:22px;max-width:440px;width:92%;max-height:90vh;overflow-y:auto;}
+        .modal-title{font-size:15px;font-weight:700;color:#B22234;margin-bottom:13px;}
+
+        @media(max-width:600px){
+            .months-grid{grid-template-columns:repeat(2,1fr);}
+            .section{padding:10px;}
+            .weeks-row{gap:3px;}
+            .week-check,.week-lock{width:28px;height:28px;font-size:14px;}
+        }
+        @media(max-width:380px){
+            .months-grid{grid-template-columns:1fr 1fr;}
+        }
+        .emp-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.55);display:none;}
+    </style>
+    <style id="dynamicEmpTheme"></style>
+    <script src="/lang.js"></script>
+</head>
+<body>
+
+<div class="modal-overlay" id="empYearOverlay" style="z-index:5000;display:none;">
+    <div class="modal">
+        <div class="modal-title">⏳ السنة النشطة غير معتمدة</div>
+        <p style="font-size:13px;color:#555;line-height:1.7;">لم يقم المسؤول بعد بحفظ <strong>السنة النشطة</strong> في الإعدادات. لا يمكن تسجيل إجازات أو عرض التقويم حتى يتم تعيينها (مثلاً 2027).</p>
+        <p style="font-size:12px;color:#888;margin-top:8px;">حدّث الصفحة بعد أن يحفظ المسؤول السنة من لوحته.</p>
+    </div>
+</div>
+
+<div class="header">
+    <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <img class="emp-avatar" id="empAvatarImg" alt="" />
+        <span>👤 <span id="empNameHeader">بوابة الموظف</span> — <span id="empYearBadge" style="font-size:14px;font-weight:600;">السنة النشطة: —</span></span>
+    </h2>
+    <div class="header-right">
+        <button type="button" class="btn btn-outline btn-sm" id="empLangBtn" onclick="toggleEmpLang()">English</button>
+        <button class="notif-btn" onclick="toggleNotif()">🔔<span class="notif-badge" id="notifBadge"></span></button>
+        <div class="notif-dropdown" id="notifDropdown">
+            <div id="notifDropdownTitle" style="padding:9px 13px;font-weight:700;color:#B22234;border-bottom:1px solid #eee;font-size:13px;">🔔 الإشعارات</div>
+            <div id="notifList"></div>
+        </div>
+        <button class="btn btn-outline btn-sm pdf-btn" id="btnPdf" onclick="printMyLeaves()">🖨️ PDF</button>
+        <button class="btn btn-outline btn-sm" id="btnLogout" onclick="logout()">خروج</button>
+    </div>
+</div>
+
+<div class="tabs">
+    <div class="tab active" id="tab_home" onclick="showTab('home',this)">🏠 الرئيسية</div>
+    <div class="tab" id="tab_reg" onclick="showTab('register',this)">📅 تسجيل إجازة</div>
+    <div class="tab" id="tab_mine" onclick="showTab('myleaves',this)">📋 إجازاتي</div>
+    <div class="tab" id="tab_swap" onclick="showTab('swap',this)">🔄 طلب تبديل</div>
+    <div class="tab" id="tab_cal" onclick="showTab('calendar',this)">🗓️ التقويم</div>
+    <div class="tab" id="tab_set" onclick="showTab('settings',this)">⚙️ الإعدادات</div>
+</div>
+
+<!-- الرئيسية -->
+<div class="section active" id="sec-home">
+    <div class="stats-grid" id="homeStats">
+        <div class="stat-card"><div class="num" id="statTotal">-</div><div class="lbl" id="lbl_statWeek">حصة الأسابيع (بالأيام)</div></div>
+        <div class="stat-card"><div class="num" id="statUsed">-</div><div class="lbl" id="lbl_statUsed">أيام مخصومة من الحصة</div></div>
+        <div class="stat-card"><div class="num" id="statRemaining">-</div><div class="lbl" id="lbl_statRem">أيام متبقّية</div></div>
+        <div class="stat-card"><div class="num" id="statCarried">-</div><div class="lbl" id="lbl_statCarry">أيام مدورة</div></div>
+    </div>
+    <div class="card" id="nextLeaveCard" style="display:none;">
+        <div class="card-title" id="ttl_nextLeave">⏳ أقرب إجازة قادمة</div>
+        <div id="nextLeaveInfo" style="font-size:14px;line-height:1.8;"></div>
+    </div>
+    <div class="card">
+        <div class="card-title" id="ttl_homeNotif">🔔 الإشعارات الأخيرة</div>
+        <div id="homeNotifs" style="font-size:13px;color:#888;">جاري التحميل...</div>
+    </div>
+</div>
+
+<!-- تسجيل إجازة -->
+<div class="section" id="sec-register">
+    <div class="card">
+        <div class="card-title">📅 اختر أسبوع الإجازة</div>
+        <p style="font-size:12px;color:#888;margin-bottom:12px;">التقويم والتسجيل للسنة النشطة المعتمدة من المسؤول فقط — <strong>فترة الرواتب</strong> (الموضع الرابع، من تقويم يشمل 21 الشهر) 🔒 محجوزة افتراضياً</p>
+        <div class="months-grid" id="monthsGrid"></div>
+    </div>
+    <div class="card">
+        <div class="card-title">📝 تسجيل إجازة بالأيام</div>
+        <p style="font-size:12px;color:#888;margin-bottom:10px;">يُحتسب فقط من <strong>الأحد إلى الخميس</strong>. الجمعة والسبت <strong>لا يُسمح بتسجيلهما</strong> ولا تُحتسبان إن وقعتا داخل الفترة. يمكنك اختيار التواريخ مباشرة ضمن السنة النشطة، أو ربطها اختيارياً بشهر/أسبوع للتحقق من نطاق الأسبوع.</p>
+        <div class="form-row">
+            <div class="form-group">
+                <label>الشهر (اختياري)</label>
+                <select class="form-control" id="reg_month"><option value="">— بدون —</option></select>
+            </div>
+            <div class="form-group">
+                <label>الأسبوع (اختياري)</label>
+                <select class="form-control" id="reg_week">
+                    <option value="">— بدون —</option>
+                    <option value="1">الأسبوع الأول</option>
+                    <option value="2">الأسبوع الثاني</option>
+                    <option value="3">الأسبوع الثالث</option>
+                    <option value="4">فترة رواتب (حول 21 الشهر)</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>من تاريخ *</label><input class="form-control" id="reg_from" type="date"></div>
+            <div class="form-group"><label>إلى تاريخ *</label><input class="form-control" id="reg_to" type="date"></div>
+        </div>
+        <p id="regWeekHint" style="font-size:11px;color:#555;margin:-4px 0 10px;line-height:1.5;"></p>
+        <div class="form-group"><label>ملاحظة (اختياري)</label><input class="form-control" id="reg_note" placeholder="أي ملاحظة للمسؤول..."></div>
+        <button class="btn btn-success" onclick="submitLeaveForm()">✅ تسجيل الإجازة</button>
+        <div class="alert" id="regAlert"></div>
+    </div>
+</div>
+
+<!-- إجازاتي -->
+<div class="section" id="sec-myleaves">
+    <div class="card">
+        <div class="card-title">📋 سجل إجازاتي</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <button class="btn btn-info btn-sm" onclick="downloadMyExcel()">⬇️ Excel</button>
+            <button class="btn btn-warning btn-sm pdf-btn" onclick="printMyLeaves()">🖨️ PDF</button>
+        </div>
+        <div id="myLeavesTable" style="overflow-x:auto;"></div>
+    </div>
+    <div class="card" id="analysisCard">
+        <div class="card-title">📊 تحليل الإجازات</div>
+        <div id="analysisContent"></div>
+    </div>
+</div>
+
+<!-- طلب تبديل -->
+<div class="section" id="sec-swap">
+    <div class="card">
+        <div class="card-title">🔄 طلب تبديل إجازة</div>
+        <div class="form-group"><label>الرقم الوظيفي للطرف الآخر</label>
+            <div style="display:flex;gap:8px;">
+                <input class="form-control" id="target_employee_id" placeholder="مثال: 88002">
+                <button class="btn btn-info btn-sm" onclick="loadTargetLeaves()">بحث</button>
+            </div>
+        </div>
+        <div class="form-group"><label>إجازتي التي أريد تبديلها</label>
+            <select class="form-control" id="my_leave_select"><option value="">-- اختر إجازتك --</option></select>
+        </div>
+        <div class="form-group"><label>إجازة الزميل المراد التبديل معها</label>
+            <select class="form-control" id="target_leave_select"><option value="">-- ابحث عن الموظف أولاً --</option></select>
+        </div>
+        <div class="form-group"><label>سبب التبديل</label><input class="form-control" id="swap_reason" placeholder="السبب..."></div>
+        <button class="btn btn-primary" onclick="submitSwap()">🔄 إرسال طلب التبديل</button>
+        <div class="alert" id="swapAlert"></div>
+    </div>
+    <div class="card">
+        <div class="card-title">📥 طلبات تبديل واردة لي</div>
+        <div id="incomingSwapList" style="overflow-x:auto;"></div>
+    </div>
+    <div class="card">
+        <div class="card-title">📋 طلبات التبديل</div>
+        <div id="swapRequestsList" style="overflow-x:auto;"></div>
+    </div>
+</div>
+
+<!-- التقويم -->
+<div class="section" id="sec-calendar">
+    <div class="card">
+        <div class="card-title">🗓️ التقويم السنوي</div>
+        <div id="calLegend" style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:4px;"><div style="width:12px;height:12px;border-radius:3px;background:#B22234;"></div>إجازتي</div>
+            <div style="display:flex;align-items:center;gap:4px;"><div style="width:12px;height:12px;border-radius:3px;background:#3498db;"></div>عطلة رسمية</div>
+        </div>
+        <div id="occLegend" style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;margin-bottom:10px;"></div>
+    </div>
+    <div class="calendar-year" id="calendarGrid"></div>
+</div>
+
+<div class="section" id="sec-settings">
+    <div class="card">
+        <div class="card-title" id="ttl_look">🎨 المظهر الشخصي</div>
+        <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
+            <img id="settingsAvatarPreview" class="emp-avatar" style="display:none;width:64px;height:64px;" alt="" />
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <label class="btn btn-info btn-sm" style="cursor:pointer;width:fit-content;">
+                    <span id="lbl_uploadAvatar">📷 رفع صورة</span>
+                    <input type="file" id="avatarFile" accept="image/*" style="display:none;" onchange="uploadAvatar(this)">
+                </label>
+                <div class="form-group" style="margin:0;">
+                    <label id="lbl_accent">لون الواجهة</label>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <input type="color" id="accentColorPicker" class="form-control" style="width:120px;padding:4px;height:40px;">
+                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveAccent" onclick="saveAccent()">💾 حفظ اللون</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="alert" id="lookAlert" style="margin-top:10px;"></div>
+    </div>
+    <div class="card">
+        <div class="card-title" id="ttl_pwd">🔐 تغيير كلمة المرور</div>
+        <div class="form-group"><label id="lbl_curPwd">كلمة المرور الحالية</label><input class="form-control" id="curPwd" type="password"></div>
+        <div class="form-group"><label id="lbl_newPwd">كلمة المرور الجديدة</label><input class="form-control" id="newPwd" type="password"></div>
+        <button class="btn btn-primary" id="btnSavePwd" onclick="changePassword()">💾 حفظ</button>
+        <div class="alert" id="pwdAlert"></div>
+    </div>
+</div>
+
+<!-- مودال تسجيل الإجازة من الشبكة -->
+<div class="modal-overlay" id="registerModal">
+    <div class="modal">
+        <div class="modal-title" id="registerModalTitle">تسجيل إجازة</div>
+        <input type="hidden" id="modal_month">
+        <input type="hidden" id="modal_week">
+        <div id="modal_info" style="background:#f8f0f1;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px;"></div>
+        <div class="form-row">
+            <div class="form-group"><label>من تاريخ (اختياري)</label><input class="form-control" id="modal_from" type="date"></div>
+            <div class="form-group"><label>إلى تاريخ (اختياري)</label><input class="form-control" id="modal_to" type="date"></div>
+        </div>
+        <div class="form-group"><label>ملاحظة</label><input class="form-control" id="modal_note" placeholder="ملاحظة للمسؤول..."></div>
+        <div class="alert" id="modalAlert"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="btn btn-success" onclick="confirmRegisterModal()">✅ تسجيل</button>
+            <button class="btn btn-warning" onclick="closeRegisterModal()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
+<!-- مودال فك الحجز -->
+<div class="modal-overlay" id="week4Modal">
+    <div class="modal">
+        <div class="modal-title">🔓 طلب فك حجز فترة الرواتب</div>
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">فترة الرواتب هي الموضع الرابع (أسبوع العمل الذي يشمل اليوم 21). سيتم إرسال طلبك للمسؤول وسيتم إشعارك بالرد.</p>
+        <div class="form-group"><label>سبب الطلب</label><textarea class="form-control" id="week4Reason" rows="3" placeholder="اذكر سبب رغبتك في التسجيل خلال فترة الرواتب لهذا الشهر..."></textarea></div>
+        <div class="alert" id="week4Alert"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="btn btn-warning" onclick="submitWeek4()">📩 إرسال الطلب</button>
+            <button class="btn btn-danger" onclick="closeWeek4Modal()">إغلاق</button>
+        </div>
+    </div>
+</div>
+<script>
+const monthNames=['','كانون الثاني','شباط','آذار','نيسان','أيار','حزيران','تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'];
+function weekSlotLabel(w){ const n=parseInt(w,10); return n===4?'فترة رواتب':`الأسبوع ${n}`; }
+function weekSlotShort(w){ const n=parseInt(w,10); return n===4?'رواتب':`أ${n}`; }
+let currentUser=null,myLeaves=[],allSwapLeaves=[],myWeek4Requests=[],selectedWeek4Month=null;
+let activeYear=null,yearWeekGrid=null,registerCal=null;
+
+async function loadActiveYear(){
+    const r=await fetch('/employee/active-year');
+    const d=await r.json();
+    const ov=document.getElementById('empYearOverlay');
+    const badge=document.getElementById('empYearBadge');
+    if(d.success&&d.year!=null&&d.year!==''){
+        activeYear=parseInt(d.year,10);
+        badge.textContent=`${UI_LANG.t('employee','activeY')}: ${activeYear}`;
+        ov.style.display='none';
+        ov.classList.remove('open');
+        applyDateConstraints();
+        return true;
+    }
+    activeYear=null;
+    badge.textContent=`${UI_LANG.t('employee','activeY')}: ${UI_LANG.t('employee','notActive')}`;
+    ov.style.display='flex';
+    ov.classList.add('open');
+    return false;
+}
+function applyDateConstraints(){
+    if(!activeYear)return;
+    const min=`${activeYear}-01-01`;
+    const max=`${activeYear}-12-31`;
+    ['reg_from','reg_to','modal_from','modal_to'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el){ el.min=min; el.max=max; }
+    });
+}
+
+function getWeekRangeForSelection(month, week){
+    if(!activeYear||!yearWeekGrid||!yearWeekGrid[month]||!yearWeekGrid[month][week]) return null;
+    const slot=yearWeekGrid[month][week];
+    return {min:slot.start_date,max:slot.end_date};
+}
+
+function applyRegisterWeekDateRange(){
+    const month=parseInt(document.getElementById('reg_month')?.value||'0',10);
+    const week=parseInt(document.getElementById('reg_week')?.value||'0',10);
+    const from=document.getElementById('reg_from');
+    const to=document.getElementById('reg_to');
+    const hint=document.getElementById('regWeekHint');
+    if(!month||!week){
+        applyDateConstraints();
+        if(from){ from.min=`${activeYear}-01-01`; from.max=`${activeYear}-12-31`; }
+        if(to){ to.min=`${activeYear}-01-01`; to.max=`${activeYear}-12-31`; }
+        if(hint) hint.textContent='لم تربط الطلب بأسبوع محدد: اختر أيام أحد–خميس ضمن السنة النشطة فقط. إن شملت الفترة جمعة/سبت فلن تُحتسبا.';
+        return;
+    }
+    const r=getWeekRangeForSelection(month, week);
+    if(!r){ applyDateConstraints(); return; }
+    [from,to].forEach(el=>{ if(el){ el.min=r.min; el.max=r.max; }});
+    if(from && (!from.value || from.value<r.min || from.value>r.max)) from.value=r.min;
+    if(to && (!to.value || to.value<r.min || to.value>r.max)) to.value=r.max;
+    const lab=(yearWeekGrid&&yearWeekGrid[month]&&yearWeekGrid[month][week]&&yearWeekGrid[month][week].label)||null;
+    if(hint) hint.textContent=lab?`${lab} (أحد→خميس): ${r.min} — ${r.max}`:`نطاق الموضع في النظام (أحد→خميس): ${r.min} — ${r.max}`;
+}
+
+function showTab(name,btn){
+    if(!activeYear && name!=='home' && name!=='settings'){
+        alert('لا يمكن المتابعة — لم يُعتمَد بعد السنة النشطة من المسؤول (مثلاً 2027).');
+        return;
+    }
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.getElementById('sec-'+name).classList.add('active');
+    if(btn) btn.classList.add('active');
+    if(name==='myleaves') loadMyLeaves();
+    if(name==='register') loadRegisterData();
+    if(name==='swap') loadSwapData();
+    if(name==='calendar') renderCalendar();
+}
+
+function logout(){ window.location.href='/auth/logout'; }
+
+function toggleNotif(){
+    const dd=document.getElementById('notifDropdown');
+    dd.classList.toggle('open');
+    if(dd.classList.contains('open')){
+        fetch('/employee/notifications/read-all',{method:'POST'});
+        document.getElementById('notifBadge').style.display='none';
+    }
+}
+document.addEventListener('click',(e)=>{
+    if(!e.target.closest('.notif-btn')&&!e.target.closest('#notifDropdown')){
+        document.getElementById('notifDropdown').classList.remove('open');
+    }
+});
+
+function notify(elId,msg,ok=true){
+    const el=document.getElementById(elId);
+    el.style.display='block';
+    el.className='alert '+(ok?'alert-success':'alert-error');
+    el.textContent=msg;
+    if(!ok && (elId==='regAlert' || elId==='modalAlert')) alert(msg);
+}
+
+async function loadMyLeaves(){
+    const res=await fetch('/employee/my-leaves'); const data=await res.json();
+    if(!data.success) return;
+    myLeaves=data.leaves||[];
+    const container=document.getElementById('myLeavesTable');
+    if(!myLeaves.length){ container.innerHTML='<div style="padding:10px;color:#888;">لا توجد إجازات مسجلة</div>'; return; }
+    container.innerHTML=`<table><thead><tr><th>الشهر</th><th>الأسبوع</th><th>من</th><th>إلى</th><th>النوع</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>
+    ${myLeaves.map(l=>`<tr>
+        <td>${monthNames[l.month_number]||l.month_number}</td>
+        <td>${weekSlotLabel(l.week_number)}${(l.leave_unit||'week')==='week'&&l.days_count&&parseInt(l.days_count,10)!==5?` <small style="color:#888;">(${l.days_count} يوم من الحصة)</small>`:''}</td>
+        <td>${l.start_date||'-'}</td><td>${l.end_date||'-'}</td>
+        <td>${(l.leave_unit||'week')==='day'?'يوم':'أسبوع'}</td>
+        <td>${l.status==='cancelled'?'<span class="badge badge-danger">ملغاة</span>':'<span class="badge badge-success">مسجلة</span>'}</td>
+        <td>${l.status==='cancelled'?'-':`<button class="btn btn-danger btn-sm" onclick="cancelLeave(${l.id})">إلغاء</button>`}</td>
+    </tr>`).join('')}</tbody></table>`;
+    loadHomeStats();
+    renderAnalysis();
+}
+
+async function cancelLeave(id){
+    if(!confirm('إلغاء هذه الإجازة؟')) return;
+    const res=await fetch('/employee/cancel-leave',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({leave_id:id})});
+    const data=await res.json();
+    alert(data.message||'تم');
+    if(data.success){ await loadMyLeaves(); await loadRegisterData(); }
+}
+
+async function loadRegisterData(){
+    const monthSel=document.getElementById('reg_month');
+    if(monthSel.options.length<=1){
+        monthSel.innerHTML='<option value="">— بدون —</option>'+[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}">${monthNames[m]}</option>`).join('');
+        monthSel.addEventListener('change',applyRegisterWeekDateRange);
+        document.getElementById('reg_week')?.addEventListener('change',applyRegisterWeekDateRange);
+    }
+    const [leavesRes,week4Res,gridRes,calRes]=await Promise.all([
+        fetch('/employee/my-leaves').then(r=>r.json()),
+        fetch('/employee/my-week4-requests').then(r=>r.json()),
+        fetch('/employee/year-week-grid').then(r=>r.json()),
+        fetch('/employee/calendar-data').then(r=>r.json())
+    ]);
+    myLeaves=leavesRes.success?(leavesRes.leaves||[]):[];
+    myWeek4Requests=week4Res.success?(week4Res.requests||[]):[];
+    yearWeekGrid=gridRes.success&&(gridRes.grid)?gridRes.grid:null;
+    registerCal=calRes.success?calRes:null;
+    applyRegisterWeekDateRange();
+    buildMonthsGrid();
+}
+
+function blockedReasonForMonthWeek(m,w){
+    if(!registerCal||!registerCal.blocked) return '';
+    const hit=registerCal.blocked.find(b=>{
+        if(b.type==='month'&&parseInt(b.month_number,10)===m) return true;
+        if(b.type==='week'&&parseInt(b.month_number,10)===m&&parseInt(b.week_number,10)===w) return true;
+        return false;
+    });
+    if(!hit) return '';
+    const kind=hit.type==='month'?'حجز شهري':'استثناء أسبوع';
+    const r=(hit.reason||'').trim();
+    return r?`${kind}: ${r}`:kind;
+}
+
+function occasionLabelsForMonth(m){
+    if(!registerCal||!registerCal.occasions) return '';
+    const y=activeYear;
+    return registerCal.occasions.filter(o=>{
+        if(!o.from_date) return false;
+        const s=new Date(o.from_date+'T12:00:00'), e=new Date((o.to_date||o.from_date)+'T12:00:00');
+        for(let d=new Date(s); d<=e; d.setDate(d.getDate()+1)){
+            if(d.getFullYear()===y&&d.getMonth()+1===m) return true;
+        }
+        return false;
+    }).map(o=>`<span style="display:inline-block;margin:2px 4px 0 0;padding:2px 6px;border-radius:6px;font-size:10px;background:${(o.color||'#3498db')}22;color:${(o.color||'#333')};" title="مناسبة / عطلة">🎉 ${o.name||'مناسبة'}</span>`).join('');
+}
+
+function buildMonthsGrid(){
+    const grid=document.getElementById('monthsGrid');
+    grid.innerHTML='';
+    if(!activeYear){ grid.innerHTML='<div style="padding:16px;color:#888;">انتظر اعتماد السنة النشطة من المسؤول.</div>'; return; }
+    for(let m=1;m<=12;m++){
+        const card=document.createElement('div'); card.className='month-card';
+        const monthLeaves=myLeaves.filter(l=>parseInt(l.month_number)===m && l.status!=='cancelled' && (l.year==null||parseInt(l.year,10)===activeYear));
+        const week4Pending=myWeek4Requests.some(r=>r.status==='pending' && parseInt(r.month_number)===m);
+        const week4Approved=myWeek4Requests.some(r=>r.status==='approved' && parseInt(r.month_number)===m);
+        let weeksHtml='';
+        const occLbl=occasionLabelsForMonth(m);
+        for(let w=1;w<=4;w++){
+            const leave=monthLeaves.find(l=>parseInt(l.week_number)===w);
+            const blk=blockedReasonForMonthWeek(m,w);
+            const titleAttr=blk?` title="${blk.replace(/"/g,'&quot;')}"`:'';
+            if(w===4 && !(currentUser?.allow_week4) && !week4Approved){
+                weeksHtml+=`<div class="week-slot"${titleAttr}><div class="week-label" style="font-size:9px;">${weekSlotShort(w)}</div><div class="week-lock" onclick="openWeek4Modal(${m})">🔒</div>${week4Pending?'<div class="week-req-sent">تم الإرسال</div>':`<button class="week-req-btn" onclick="openWeek4Modal(${m})">طلب</button>`}${blk?`<div style="font-size:8px;color:#c62828;margin-top:2px;max-width:52px;text-align:center;line-height:1.2;">🚫</div>`:''}</div>`;
+            } else {
+                const blockedCls=blk?' blocked-week':'';
+                const wmark=w===4?'💰':w;
+                weeksHtml+=`<div class="week-slot"${titleAttr}><div class="week-label" style="font-size:9px;">${weekSlotShort(w)}</div><div class="week-check${blockedCls}${leave?' registered':''}" ${blk?'':`onclick="quickRegister(${m},${w},${leave?1:0})"`} style="${blk?'opacity:0.85;pointer-events:none;':''}">${leave?'✓':(blk?'🚫':wmark)}</div></div>`;
+            }
+        }
+        card.innerHTML=`<div class="month-header"><div class="month-name-ar">${monthNames[m]}</div><div class="month-name-sub">${m}</div>${occLbl?`<div style="margin-top:6px;text-align:center;line-height:1.4;">${occLbl}</div>`:''}</div><div class="weeks-row">${weeksHtml}</div>`;
+        grid.appendChild(card);
+    }
+}
+
+function openRegisterModal(month,week){
+    document.getElementById('modal_month').value=month;
+    document.getElementById('modal_week').value=week;
+    document.getElementById('registerModalTitle').textContent=`تسجيل إجازة - ${monthNames[month]} / ${weekSlotLabel(week)}`;
+    const r=getWeekRangeForSelection(month,week);
+    document.getElementById('modal_info').innerHTML=r
+        ? `أسبوع العمل لهذا الموضع: <strong>${r.min}</strong> → <strong>${r.max}</strong> (أحد–خميس). الجمعة والسبت غير مسموحين.`
+        : 'تعذر حساب نطاق الأسبوع — تأكد من تحميل السنة النشطة.';
+    const mf=document.getElementById('modal_from');
+    const mt=document.getElementById('modal_to');
+    if(r && mf && mt){
+        mf.min=r.min; mf.max=r.max; mf.value=r.min;
+        mt.min=r.min; mt.max=r.max; mt.value=r.max;
+    } else {
+        document.getElementById('modal_from').value='';
+        document.getElementById('modal_to').value='';
+    }
+    document.getElementById('modal_note').value='';
+    document.getElementById('modalAlert').style.display='none';
+    document.getElementById('registerModal').classList.add('open');
+}
+function closeRegisterModal(){ document.getElementById('registerModal').classList.remove('open'); }
+function openWeek4Modal(month){ selectedWeek4Month=month; document.getElementById('week4Reason').value=''; document.getElementById('week4Alert').style.display='none'; document.getElementById('week4Modal').classList.add('open'); }
+function closeWeek4Modal(){ document.getElementById('week4Modal').classList.remove('open'); }
+
+async function submitLeave(month,week,from,to,note,alertId){
+    if(!activeYear){ notify(alertId,'لا يمكن التسجيل — لم تُعتمَد السنة النشطة من المسؤول.',false); return false; }
+    const payload={start_date:from||null,end_date:to||null,employee_note:note||''};
+    if(month!=null&&month!=='') payload.month_number=month;
+    if(week!=null&&week!=='') payload.week_number=week;
+    const res=await fetch('/employee/submit-leave',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    notify(alertId,data.message||'تم',data.success);
+    if(data.success){ await loadMyLeaves(); await loadRegisterData(); }
+    return data.success;
+}
+async function quickRegister(month,week,already){
+    if(already) return;
+    if(!activeYear){ alert('لا يمكن التسجيل — السنة النشطة غير معتمدة.'); return; }
+    if(!confirm(`تسجيل إجازة تلقائياً لشهر ${monthNames[month]} — ${weekSlotLabel(week)} — سنة ${activeYear}؟`)) return;
+    await submitLeave(month,week,null,null,'','regAlert');
+}
+async function confirmRegisterModal(){
+    const ok=await submitLeave(document.getElementById('modal_month').value,document.getElementById('modal_week').value,document.getElementById('modal_from').value,document.getElementById('modal_to').value,document.getElementById('modal_note').value,'modalAlert');
+    if(ok) setTimeout(closeRegisterModal,700);
+}
+async function submitLeaveForm(){
+    const from=document.getElementById('reg_from').value;
+    const to=document.getElementById('reg_to').value;
+    if(!from||!to){ notify('regAlert','حدد «من تاريخ» و«إلى تاريخ» (أيام أحد–خميس ضمن السنة النشطة).',false); return; }
+    const rm=document.getElementById('reg_month').value;
+    const rw=document.getElementById('reg_week').value;
+    await submitLeave(rm||null,rw||null,from,to,document.getElementById('reg_note').value,'regAlert');
+}
+async function submitWeek4(){
+    if(!activeYear){ notify('week4Alert','لا يمكن إرسال الطلب — السنة النشطة غير معتمدة.',false); return; }
+    const reason=document.getElementById('week4Reason').value.trim();
+    const res=await fetch('/employee/request-week4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason,month_number:selectedWeek4Month})});
+    const data=await res.json();
+    notify('week4Alert',data.message||'تم',data.success);
+    if(data.success){ await loadRegisterData(); setTimeout(closeWeek4Modal,700); }
+}
+
+async function loadSwapData(){
+    const [myRes,reqRes,inRes]=await Promise.all([
+        fetch('/employee/my-leaves').then(r=>r.json()),
+        fetch('/employee/my-swap-requests').then(r=>r.json()),
+        fetch('/employee/incoming-swap-requests').then(r=>r.json())
+    ]);
+    const mySel=document.getElementById('my_leave_select');
+    const targetSel=document.getElementById('target_leave_select');
+    const my=myRes.success?(myRes.leaves||[]).filter(l=>l.status!=='cancelled'):[];
+    mySel.innerHTML='<option value="">-- اختر إجازتك --</option>'+my.map(l=>`<option value="${l.id}">${monthNames[l.month_number]||l.month_number} — ${weekSlotLabel(l.week_number)}</option>`).join('');
+    targetSel.innerHTML='<option value="">-- ابحث عن الموظف أولاً --</option>';
+    const req=reqRes.success?(reqRes.requests||[]):[];
+    const incoming=inRes.success?(inRes.requests||[]):[];
+    document.getElementById('swapRequestsList').innerHTML=req.length?`<table><thead><tr><th>طلبي</th><th>الزميل</th><th>الحالة</th><th>ملاحظة</th></tr></thead><tbody>
+    ${req.map(r=>`<tr><td>${monthNames[r.req_month]||r.req_month} — ${weekSlotLabel(r.req_week)}</td><td>${r.target_name||'-'} (${monthNames[r.tar_month]||r.tar_month} — ${weekSlotLabel(r.tar_week)})</td><td>${r.status}</td><td>${r.admin_note||'-'}</td></tr>`).join('')}
+    </tbody></table>`:'<div style="padding:10px;color:#888;">لا توجد طلبات تبديل</div>';
+    document.getElementById('incomingSwapList').innerHTML=incoming.length?`<table><thead><tr><th>من</th><th>التبديل</th><th>ملاحظة</th><th>إجراء</th></tr></thead><tbody>
+    ${incoming.map(r=>`<tr><td>${r.requester_name} (${r.requester_emp})</td><td>طلبه: ${monthNames[r.req_month]} ${weekSlotLabel(r.req_week)} ⇄ إجازتك: ${monthNames[r.tar_month]} ${weekSlotLabel(r.tar_week)}</td><td>${r.reason||'-'}</td><td><button class="btn btn-success btn-sm" onclick="respondSwap(${r.id},'accept')">موافقة</button> <button class="btn btn-danger btn-sm" onclick="respondSwap(${r.id},'reject')">رفض</button></td></tr>`).join('')}
+    </tbody></table>`:'<div style="padding:10px;color:#888;">لا توجد طلبات واردة</div>';
+}
+async function loadTargetLeaves(){
+    const employee_id=document.getElementById('target_employee_id').value.trim();
+    if(!employee_id){ notify('swapAlert','أدخل الرقم الوظيفي أولاً',false); return; }
+    const res=await fetch('/employee/leaves-by-employee/'+encodeURIComponent(employee_id)); const data=await res.json();
+    if(!data.success){ notify('swapAlert',data.message||'لم يتم العثور على الموظف',false); return; }
+    allSwapLeaves=data.leaves||[];
+    const targetSel=document.getElementById('target_leave_select');
+    targetSel.innerHTML='<option value="">-- اختر إجازة الزميل --</option>'+allSwapLeaves.map(l=>`<option value="${l.id}">${monthNames[l.month_number]||l.month_number} — ${weekSlotLabel(l.week_number)}</option>`).join('');
+    notify('swapAlert',`تم العثور على ${data.target.name}`,true);
+}
+async function respondSwap(id,action){
+    const note=prompt('ملاحظة (اختياري):')||'';
+    const res=await fetch('/employee/swap-requests/respond',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action,note})});
+    const data=await res.json();
+    alert(data.message||'تم');
+    if(data.success) loadSwapData();
+}
+async function submitSwap(){
+    if(!activeYear){ notify('swapAlert','لا يمكن إرسال الطلب — السنة النشطة غير معتمدة.',false); return; }
+    const my_leave_id=document.getElementById('my_leave_select').value;
+    const target_leave_id=document.getElementById('target_leave_select').value;
+    const reason=document.getElementById('swap_reason').value.trim();
+    if(!my_leave_id||!target_leave_id){ notify('swapAlert','اختر الإجازتين أولاً',false); return; }
+    const res=await fetch('/employee/request-swap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({my_leave_id,target_leave_id,reason})});
+    const data=await res.json(); notify('swapAlert',data.message||'تم',data.success);
+    if(data.success) loadSwapData();
+}
+
+async function renderCalendar(){
+    const grid=document.getElementById('calendarGrid');
+    if(!activeYear){ grid.innerHTML='<div style="padding:20px;color:#888;text-align:center;">التقويم متاح بعد اعتماد السنة النشطة من المسؤول.</div>'; return; }
+    const res=await fetch('/employee/calendar-data'); const data=await res.json(); if(!data.success) return;
+    const my=data.myLeaves||[]; const occasions=data.occasions||[]; const density=data.density||[]; const blocked=data.blocked||[]; const maxCap=data.defaultMax||3;
+    const y=activeYear;
+    document.getElementById('occLegend').innerHTML=`<div style="display:flex;align-items:center;gap:4px;"><div style="width:12px;height:12px;background:#fff3cd;border-radius:3px;"></div>مزدحم</div><div style="display:flex;align-items:center;gap:4px;"><div style="width:12px;height:12px;background:#f8d7da;border-radius:3px;"></div>مزدحم جداً</div><div style="display:flex;align-items:center;gap:4px;"><div style="width:12px;height:12px;background:#e74c3c;border-radius:3px;"></div>مغلق</div>`;
+    grid.innerHTML='';
+    const heads=['أح','اث','ثل','أر','خم','جم','سب'];
+    for(let m=1;m<=12;m++){
+        const daysInMonth=new Date(y,m,0).getDate();
+        const startDow=new Date(y,m-1,1).getDay();
+        const occDays={};
+        occasions.forEach(o=>{
+            if(!o.from_date) return;
+            const s=new Date(o.from_date+'T12:00:00'),e=new Date((o.to_date||o.from_date)+'T12:00:00');
+            for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){
+                if(d.getFullYear()===y&&d.getMonth()+1===m) occDays[d.getDate()]={ color:o.color||'#3498db', name:o.name||'مناسبة' };
+            }
+        });
+        const leaveDays={};
+        my.filter(l=>l.status!=='cancelled').forEach(l=>{
+            if(!l.start_date)return;
+            const s=new Date(l.start_date+'T12:00:00'),e=new Date((l.end_date||l.start_date)+'T12:00:00');
+            for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){
+                if(d.getFullYear()===y&&d.getMonth()+1===m) leaveDays[d.getDate()]=1;
+            }
+        });
+        let html=`<div class="cal-month-title">${monthNames[m]} (${m}) — ${y}</div><div class="cal-grid">${heads.map(h=>`<div class="dh">${h}</div>`).join('')}${Array(startDow).fill('<div class="dc empty">·</div>').join('')}`;
+        for(let d=1;d<=daysInMonth;d++){
+            const dow=new Date(y,m-1,d).getDay();
+            let cls='dc';
+            let style='';
+            let tit='';
+            if(dow===5||dow===6) cls+=' weekend';
+            if(leaveDays[d]) cls+=' my-leave';
+            else if(occDays[d]){
+                cls+=' occasion-day';
+                style=`background:${occDays[d].color}22;border:1px solid ${occDays[d].color};`;
+                tit=` title="${String(occDays[d].name).replace(/"/g,'&quot;')}"`;
+            }
+            html+=`<div class="${cls}" style="${style}"${tit}>${d}</div>`;
+        }
+        html+='</div>'; const card=document.createElement('div'); card.className='cal-month'; card.innerHTML=html; grid.appendChild(card);
+        const weekInfo=[1,2,3,4].map(w=>{
+            const c=(density.find(x=>parseInt(x.month_number)===m&&parseInt(x.week_number)===w)||{}).cnt||0;
+            const blockRow=blocked.find(b=>(b.type==='month'&&parseInt(b.month_number)===m)||(b.type==='week'&&parseInt(b.month_number)===m&&parseInt(b.week_number)===w));
+            const isBlocked=!!blockRow;
+            const color=isBlocked?'#e74c3c':(c>=maxCap?'#f8d7da':(c>=Math.ceil(maxCap*0.7)?'#fff3cd':'#d4edda'));
+            const sub=isBlocked?(blockRow.reason?`مغلق (${blockRow.reason})`:'مغلق'):String(c);
+            const wtit=blockRow&&blockRow.reason?` title="استثناء: ${String(blockRow.reason).replace(/"/g,'&quot;')}"`:'';
+            const wlab=w===4?'رواتب':`أ${w}`;
+            return `<div${wtit} style="flex:1;text-align:center;padding:4px;border-radius:5px;background:${color};font-size:9px;line-height:1.25;">${wlab}: ${sub}</div>`;
+        }).join('');
+        card.innerHTML += `<div style="display:flex;gap:4px;margin-top:6px;">${weekInfo}</div>`;
+    }
+}
+
+async function loadNotifications(){
+    const res=await fetch('/employee/notifications'); const data=await res.json(); if(!data.success) return;
+    const badge=document.getElementById('notifBadge'); if(data.unread>0){badge.style.display='flex';badge.textContent=data.unread>9?'9+':data.unread;} else badge.style.display='none';
+    const list=(data.notifications||[]).map(n=>`<div class="notif-item ${n.is_read?'':'unread'}">${n.message}<div class="notif-time">${new Date(n.created_at).toLocaleString('ar')}</div></div>`).join('');
+    document.getElementById('notifList').innerHTML=list||'<div style="padding:12px;color:#888;">لا توجد إشعارات</div>';
+    document.getElementById('homeNotifs').innerHTML=list||'لا توجد إشعارات';
+}
+
+function loadHomeStats(){
+    const weekLeaves=myLeaves.filter(l=>l.status!=='cancelled' && (l.leave_unit||'week')==='week' && (l.year==null||parseInt(l.year,10)===activeYear));
+    const usedDayCredits=weekLeaves.reduce((s,l)=>{
+        const dc=parseInt(l.days_count,10)||0;
+        const cu=parseInt(l.carried_days_used,10)||0;
+        return s+Math.max(0,dc-cu);
+    },0);
+    const maxDayCredits=(currentUser?.annual_leave_weeks||0)*5;
+    const totalW=currentUser?.annual_leave_weeks||0;
+    document.getElementById('statTotal').textContent=`${totalW} أسابيع (${maxDayCredits} يوم)`;
+    document.getElementById('statUsed').textContent=`${usedDayCredits} يوم مخصوم`;
+    const rem=Math.max(0,maxDayCredits-usedDayCredits);
+    document.getElementById('statRemaining').textContent=`${rem} يوم (${(rem/5).toFixed(1).replace(/\.0$/,'')} أسبوع مكافئ)`;
+    document.getElementById('statCarried').textContent=currentUser?.carried_over_days||0;
+}
+function printMyLeaves(){
+    const lang=UI_LANG.get()==='en'?'en':'ar';
+    window.open('/employee/leave-report?lang='+encodeURIComponent(lang),'_blank','noopener');
+}
+function applyEmpLang(){
+    UI_LANG.set(UI_LANG.get());
+    const t=(k)=>UI_LANG.t('employee',k);
+    document.getElementById('empLangBtn').textContent=t('langBtn');
+    document.querySelectorAll('.pdf-btn').forEach(b=>{ b.textContent=t('pdf'); });
+    document.getElementById('btnLogout').textContent=t('logout');
+    document.getElementById('tab_home').textContent=t('tabHome');
+    document.getElementById('tab_reg').textContent=t('tabReg');
+    document.getElementById('tab_mine').textContent=t('tabMine');
+    document.getElementById('tab_swap').textContent=t('tabSwap');
+    document.getElementById('tab_cal').textContent=t('tabCal');
+    document.getElementById('tab_set').textContent=t('tabSet');
+    document.getElementById('lbl_statWeek').textContent=t('statWeek');
+    document.getElementById('lbl_statUsed').textContent=t('statUsed');
+    document.getElementById('lbl_statRem').textContent=t('statRem');
+    document.getElementById('lbl_statCarry').textContent=t('statCarry');
+    document.getElementById('ttl_nextLeave').textContent=t('nextLeave');
+    document.getElementById('ttl_homeNotif').textContent=t('notifTitle');
+    document.getElementById('notifDropdownTitle').textContent=t('notifBell');
+    document.getElementById('ttl_look').textContent=t('lookTitle');
+    document.getElementById('lbl_uploadAvatar').textContent=t('uploadAvatar');
+    document.getElementById('lbl_accent').textContent=t('accent');
+    document.getElementById('btnSaveAccent').textContent=t('saveColor');
+    document.getElementById('ttl_pwd').textContent=t('pwdTitle');
+    document.getElementById('lbl_curPwd').textContent=t('curPwd');
+    document.getElementById('lbl_newPwd').textContent=t('newPwd');
+    document.getElementById('btnSavePwd').textContent=t('savePwd');
+}
+function toggleEmpLang(){ UI_LANG.set(UI_LANG.get()==='ar'?'en':'ar'); applyEmpLang(); if(activeYear) loadHomeStats(); }
+function applyUserTheme(){
+    const c=(currentUser&&currentUser.accent_color&&/^#[0-9A-Fa-f]{6}$/.test(currentUser.accent_color))?currentUser.accent_color:'#B22234';
+    const pick=document.getElementById('accentColorPicker');
+    if(pick) pick.value=c;
+    const st=document.getElementById('dynamicEmpTheme');
+    st.textContent='.header{background:linear-gradient(135deg,'+c+'cc,'+c+') !important;}'+
+        '.tab.active{border-bottom-color:'+c+' !important;color:'+c+' !important;}'+
+        '.card-title{color:'+c+' !important;border-bottom-color:#fde8ea !important;}'+
+        'th{color:'+c+' !important;}'+
+        '.stat-card{border-top-color:'+c+' !important;}'+
+        '.stat-card .num{color:'+c+' !important;}'+
+        '.month-header{background:linear-gradient(135deg,'+c+'dd,'+c+') !important;}'+
+        '.week-check.registered{background:'+c+' !important;border-color:'+c+' !important;}'+
+        '.week-check:hover{border-color:'+c+' !important;}'+
+        '.cal-grid .dc.my-leave{background:'+c+' !important;}'+
+        '.tl-dot{background:'+c+' !important;box-shadow:0 0 0 2px '+c+';}'+
+        '#notifDropdownTitle{color:'+c+' !important;}';
+}
+function syncAvatarUi(){
+    const u=currentUser&&currentUser.avatar_url;
+    const prev=document.getElementById('settingsAvatarPreview');
+    const head=document.getElementById('empAvatarImg');
+    if(u){ prev.src=u; prev.style.display='block'; head.src=u; head.style.display='block'; }
+    else { prev.style.display='none'; head.style.display='none'; }
+}
+async function uploadAvatar(inp){
+    if(!inp.files||!inp.files[0]) return;
+    const fd=new FormData();
+    fd.append('avatar', inp.files[0]);
+    const res=await fetch('/employee/profile/avatar',{ method:'POST', body:fd });
+    const data=await res.json();
+    const alert=document.getElementById('lookAlert');
+    alert.style.display='block';
+    if(data.success){
+        currentUser.avatar_url=data.avatar_url;
+        syncAvatarUi();
+        alert.className='alert alert-success';
+        alert.textContent=UI_LANG.get()==='en'?'Photo updated':'تم تحديث الصورة';
+    } else {
+        alert.className='alert alert-error';
+        alert.textContent=data.message||'فشل';
+    }
+    inp.value='';
+}
+async function saveAccent(){
+    const hex=document.getElementById('accentColorPicker').value;
+    const res=await fetch('/employee/profile/theme',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ accent_color:hex }) });
+    const data=await res.json();
+    const alert=document.getElementById('lookAlert');
+    alert.style.display='block';
+    if(data.success){
+        currentUser.accent_color=hex;
+        applyUserTheme();
+        alert.className='alert alert-success';
+        alert.textContent=UI_LANG.get()==='en'?'Color saved':'تم حفظ اللون';
+    } else {
+        alert.className='alert alert-error';
+        alert.textContent=data.message||'فشل';
+    }
+}
+function downloadMyExcel(){
+    if(!activeYear){ alert('لا يمكن التصدير — السنة النشطة غير معتمدة.'); return; }
+    window.open('/employee/export-my-leaves','_blank');
+}
+function renderAnalysis(){
+    const box=document.getElementById('analysisContent');
+    const leaves=myLeaves.filter(l=>l.status!=='cancelled' && activeYear && (l.year==null||parseInt(l.year,10)===activeYear)).sort((a,b)=>new Date(a.start_date)-new Date(b.start_date));
+    if(leaves.length<1){ box.innerHTML='<div style="color:#888;">لا توجد بيانات كافية للتحليل</div>'; return; }
+    const occasionsPromise=fetch('/employee/occasions').then(r=>r.json());
+    occasionsPromise.then(data=>{
+        const occasions=(data.success?data.occasions:[]).filter(o=>o.from_date);
+        const lines=[];
+        for(let i=0;i<leaves.length-1;i++){
+            const d1=new Date(leaves[i].end_date||leaves[i].start_date);
+            const d2=new Date(leaves[i+1].start_date);
+            const diff=Math.max(0,Math.floor((d2-d1)/86400000));
+            lines.push(`بين إجازة ${i+1} وإجازة ${i+2}: ${diff} يوم`);
+        }
+        leaves.forEach((l,idx)=>{
+            const ls=new Date(l.start_date);
+            occasions.forEach(o=>{
+                const os=new Date(o.from_date);
+                const diff=Math.floor((os-ls)/86400000);
+                if(Math.abs(diff)<=30) lines.push(`إجازة ${idx+1} ${diff===0?'متزامنة':(diff>0?`قبل ${o.name} بـ ${diff} يوم`:`بعد ${o.name} بـ ${Math.abs(diff)} يوم`)}`);
+            });
+        });
+        box.innerHTML = `<div class="analysis-section"><div class="analysis-title">نتيجة التحليل</div>${lines.length?'<ul style="padding-right:18px;line-height:2;">'+lines.map(x=>`<li>${x}</li>`).join('')+'</ul>':'<div style="color:#888;">لا توجد فواصل تحليلية كافية حالياً</div>'}</div>`;
+    });
+}
+async function changePassword(){
+    const current_password=document.getElementById('curPwd').value;
+    const new_password=document.getElementById('newPwd').value;
+    const res=await fetch('/employee/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_password,new_password})});
+    const data=await res.json();
+    notify('pwdAlert',data.message||'تم',data.success);
+    if(data.success){ document.getElementById('curPwd').value=''; document.getElementById('newPwd').value=''; }
+}
+
+async function boot(){
+    const me=await fetch('/auth/me').then(r=>r.json());
+    if(!me.success||!me.user||me.user.is_admin){ window.location.href='/'; return; }
+    currentUser=me.user;
+    applyEmpLang();
+    applyUserTheme();
+    syncAvatarUi();
+    document.getElementById('empNameHeader').textContent=`${me.user.name} (${me.user.employee_id})`;
+    const ok=await loadActiveYear();
+    if(!ok){
+        document.getElementById('homeNotifs').innerHTML='<span style="color:#c0392b;">انتظر حتى يحفظ المسؤول السنة النشطة في الإعدادات.</span>';
+        return;
+    }
+    await loadMyLeaves();
+    await loadRegisterData();
+    await loadNotifications();
+    await renderCalendar();
+}
+boot();
+</script>
+</body>
+</html>
