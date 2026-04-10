@@ -3,8 +3,18 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const db = require('../database/db');
 const ExcelJS = require('exceljs');
+
+const User = require('../models/User');
+const Leave = require('../models/Leave');
+const BlockedPeriod = require('../models/BlockedPeriod');
+const Occasion = require('../models/Occasion');
+const Setting = require('../models/Setting');
+const WeekCapacity = require('../models/WeekCapacity');
+const Week4Permission = require('../models/Week4Permission');
+const Week4Request = require('../models/Week4Request');
+const SwapRequest = require('../models/SwapRequest');
+const Notification = require('../models/Notification');
 
 const avDir = path.join(__dirname, '..', 'public', 'uploads', 'avatars');
 const avatarStorage = multer.diskStorage({
@@ -19,6 +29,7 @@ const avatarStorage = multer.diskStorage({
     },
 });
 const avatarUpload = multer({ storage: avatarStorage, limits: { fileSize: 2 * 1024 * 1024 } });
+
 const {
     getWeekAutoDates,
     trimToBillableEnds,
@@ -34,49 +45,65 @@ function requireAuth(req, res, next) {
     next();
 }
 
-/** السنة النشطة من الإعدادات فقط — بدون افتراض من تاريخ الجهاز */
-function getActiveYearSetting() {
-    const row = db.prepare("SELECT value FROM settings WHERE key='active_year'").get();
+async function getActiveYearSetting() {
+    const row = await Setting.findOne({ key: 'active_year' }).lean();
     if (!row || row.value === undefined || row.value === null || String(row.value).trim() === '') return null;
     const y = parseInt(String(row.value).trim(), 10);
     return Number.isFinite(y) && y >= 2000 && y <= 2100 ? y : null;
 }
 
-function loadOccasionDaySet() {
-    const occasions = db.prepare('SELECT * FROM occasions ORDER BY from_date').all();
+async function loadOccasionDaySet() {
+    const occasions = await Occasion.find({}).sort({ from_date: 1 }).lean();
     return buildOccasionDaySet(occasions);
 }
 
-/** مجموع أيام العمل من حصة الأسابيع: أيام leave_unit=week ناقص الجزء المدفوع من الرصيد المدور */
-function getUsedWeekDayCredits(userId, year) {
-    const row = db.prepare(`
-        SELECT COALESCE(SUM(
-            CASE WHEN IFNULL(leave_unit,'week')='week'
-            THEN days_count - IFNULL(carried_days_used, 0) ELSE 0 END
-        ), 0) as s FROM leaves
-        WHERE user_id=? AND status!='cancelled' AND (year=? OR year IS NULL)
-    `).get(userId, year);
-    return row ? row.s : 0;
+async function getUsedWeekDayCredits(userId, year) {
+    const rows = await Leave.aggregate([
+        {
+            $match: {
+                user_id: userId,
+                status: { $ne: 'cancelled' },
+                $and: [
+                    { $or: [{ year }, { year: null }, { year: { $exists: false } }] },
+                    { $or: [{ leave_unit: 'week' }, { leave_unit: null }, { leave_unit: { $exists: false } }] },
+                ],
+            },
+        },
+        {
+            $group: {
+                _id: null,
+                s: {
+                    $sum: {
+                        $subtract: [
+                            { $ifNull: ['$days_count', 5] },
+                            { $ifNull: ['$carried_days_used', 0] },
+                        ],
+                    },
+                },
+            },
+        },
+    ]);
+    return rows[0]?.s || 0;
 }
 
-router.get('/me', requireAuth, (req, res) => {
+router.get('/me', requireAuth, async (req, res) => {
     try {
-        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+        const user = await User.findById(req.session.user.id).lean();
         if (!user) return res.json({ success: false, message: 'لم يتم العثور على المستخدم' });
-        res.json({ success: true, user });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+        res.json({ success: true, user: { ...user, id: String(user._id) } });
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/active-year', requireAuth, (req, res) => {
+router.get('/active-year', requireAuth, async (req, res) => {
     try {
-        const y = getActiveYearSetting();
+        const y = await getActiveYearSetting();
         res.json({ success: y !== null, year: y, message: y === null ? 'لم يتم تعيين سنة نشطة من المسؤول' : '' });
     } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/year-week-grid', requireAuth, (req, res) => {
+router.get('/year-week-grid', requireAuth, async (req, res) => {
     try {
-        const y = getActiveYearSetting();
+        const y = await getActiveYearSetting();
         if (y === null) return res.json({ success: false, noActiveYear: true });
         const grid = {};
         for (let m = 1; m <= 12; m++) {
@@ -86,89 +113,116 @@ router.get('/year-week-grid', requireAuth, (req, res) => {
             }
         }
         res.json({ success: true, year: y, grid });
-    } catch (e) {
-        res.json({ success: false, message: e.message });
-    }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/my-leaves', requireAuth, (req, res) => {
+router.get('/my-leaves', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        const y = getActiveYearSetting();
-        if (y === null) {
-            return res.json({ success: true, leaves: [], noActiveYear: true });
-        }
-        const leaves = db.prepare(
-            'SELECT * FROM leaves WHERE user_id=? AND (year=? OR year IS NULL) ORDER BY month_number, week_number'
-        ).all(userId, y);
-        res.json({ success: true, leaves, activeYear: y });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+        const y = await getActiveYearSetting();
+        if (y === null) return res.json({ success: true, leaves: [], noActiveYear: true });
+        const leaves = await Leave.find({
+            user_id: userId,
+            $or: [{ year: y }, { year: null }, { year: { $exists: false } }],
+        }).sort({ month_number: 1, week_number: 1 }).lean();
+        res.json({ success: true, leaves: leaves.map(l => ({ ...l, id: String(l._id) })), activeYear: y });
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.post('/submit-leave', requireAuth, (req, res) => {
+router.post('/submit-leave', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
         const { month_number, week_number, start_date, end_date, employee_note } = req.body;
-        const activeYear = getActiveYearSetting();
+        const activeYear = await getActiveYearSetting();
         if (activeYear === null) {
             return res.json({ success: false, message: 'لم يتم تعيين سنة نشطة من المسؤول — لا يمكن تسجيل إجازة' });
         }
 
-        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+        const user = await User.findById(userId).lean();
         if (!user) return res.json({ success: false, message: 'المستخدم غير موجود' });
 
-        const occasionSet = loadOccasionDaySet();
+        const occasionSet = await loadOccasionDaySet();
         const maxDayCredits = (user.annual_leave_weeks || 0) * 5;
-        const usedWeekCredits = getUsedWeekDayCredits(userId, activeYear);
+        const usedWeekCredits = await getUsedWeekDayCredits(userId, activeYear);
 
         const requestedDayMode = !!(start_date && end_date);
+
+        async function ensureNoExisting(monthNum, weekNum) {
+            const existing = await Leave.findOne({
+                user_id: userId,
+                month_number: monthNum,
+                week_number: weekNum,
+                status: { $ne: 'cancelled' },
+            }).lean();
+            if (existing) return { ok: false, message: 'لديك إجازة مسجلة بالفعل لهذا الأسبوع' };
+            return { ok: true };
+        }
+
+        async function ensureNotBlocked(monthNum, weekNum) {
+            const blockedRow = await BlockedPeriod.findOne({
+                $or: [
+                    { type: 'week', year: activeYear, month_number: monthNum, week_number: weekNum },
+                    { type: 'month', year: activeYear, month_number: monthNum },
+                ],
+            }).lean();
+            if (blockedRow) {
+                const r = blockedRow.reason ? ` — ${blockedRow.reason}` : '';
+                return { ok: false, message: `هذا الأسبوع محجوز من المسؤول (استثناء)${r}` };
+            }
+            return { ok: true };
+        }
+
+        async function ensureWeek4Allowed(monthNum, weekNum) {
+            if (weekNum !== 4) return { ok: true };
+            if (user.allow_week4) return { ok: true };
+            const perm = await Week4Permission.findOne({ user_id: userId, year: activeYear, month_number: monthNum }).lean();
+            if (!perm) return { ok: false, message: 'فترة الرواتب (الموضع الرابع) محجوزة لهذا الشهر — اطلب فك الحجز لهذا الشهر فقط' };
+            return { ok: true };
+        }
+
+        async function getMaxAllowed(monthNum, weekNum) {
+            const maxSetting = await Setting.findOne({ key: 'default_max_per_week' }).lean();
+            const defaultMax = maxSetting ? parseInt(maxSetting.value, 10) : 3;
+            const capOverride = await WeekCapacity.findOne({ year: activeYear, month_number: monthNum, week_number: weekNum }).lean();
+            return capOverride ? capOverride.max_employees : defaultMax;
+        }
+
+        async function ensureCapacity(monthNum, weekNum) {
+            const maxAllowed = await getMaxAllowed(monthNum, weekNum);
+            const currentCount = await Leave.countDocuments({
+                month_number: monthNum,
+                week_number: weekNum,
+                status: { $ne: 'cancelled' },
+                user_id: { $ne: userId },
+                $or: [{ year: activeYear }, { year: null }, { year: { $exists: false } }],
+            });
+            if (currentCount >= maxAllowed) return { ok: false, message: `الأسبوع ممتلئ (الحد الأقصى ${maxAllowed} موظفين)` };
+            return { ok: true };
+        }
 
         if (!requestedDayMode) {
             if (!month_number || !week_number) return res.json({ success: false, message: 'بيانات غير مكتملة' });
             const monthNum = parseInt(month_number, 10);
             const weekNum = parseInt(week_number, 10);
 
-            const existing = db.prepare(
-                "SELECT id FROM leaves WHERE user_id=? AND month_number=? AND week_number=? AND status!='cancelled'"
-            ).get(userId, monthNum, weekNum);
-            if (existing) return res.json({ success: false, message: 'لديك إجازة مسجلة بالفعل لهذا الأسبوع' });
+            const ex = await ensureNoExisting(monthNum, weekNum);
+            if (!ex.ok) return res.json({ success: false, message: ex.message });
 
-            const blockedRow = db.prepare(
-                "SELECT reason FROM blocked_periods WHERE (type='week' AND year=? AND month_number=? AND week_number=?) OR (type='month' AND year=? AND month_number=?)"
-            ).get(activeYear, monthNum, weekNum, activeYear, monthNum);
-            if (blockedRow) {
-                const r = blockedRow.reason ? ` — ${blockedRow.reason}` : '';
-                return res.json({ success: false, message: `هذا الأسبوع محجوز من المسؤول (استثناء)${r}` });
-            }
+            const blk = await ensureNotBlocked(monthNum, weekNum);
+            if (!blk.ok) return res.json({ success: false, message: blk.message });
 
-            if (weekNum === 4 && !user.allow_week4) {
-                const hasPermission = db.prepare(
-                    'SELECT id FROM week4_permissions WHERE user_id=? AND year=? AND month_number=?'
-                ).get(userId, activeYear, monthNum);
-                if (!hasPermission) return res.json({ success: false, message: 'فترة الرواتب (الموضع الرابع) محجوزة لهذا الشهر — اطلب فك الحجز لهذا الشهر فقط' });
-            }
+            const w4 = await ensureWeek4Allowed(monthNum, weekNum);
+            if (!w4.ok) return res.json({ success: false, message: w4.message });
 
-            const maxSetting = db.prepare("SELECT value FROM settings WHERE key='default_max_per_week'").get();
-            const defaultMax = maxSetting ? parseInt(maxSetting.value) : 3;
-            const capOverride = db.prepare(
-                'SELECT max_employees FROM week_capacity WHERE year=? AND month_number=? AND week_number=?'
-            ).get(activeYear, monthNum, weekNum);
-            const maxAllowed = capOverride ? capOverride.max_employees : defaultMax;
-            const currentCount = db.prepare(
-                "SELECT COUNT(*) as cnt FROM leaves WHERE month_number=? AND week_number=? AND status!='cancelled' AND user_id!=? AND (year=? OR year IS NULL)"
-            ).get(monthNum, weekNum, userId, activeYear).cnt;
-            if (currentCount >= maxAllowed) {
-                return res.json({ success: false, message: `الأسبوع ممتلئ (الحد الأقصى ${maxAllowed} موظفين)` });
-            }
+            const cap = await ensureCapacity(monthNum, weekNum);
+            if (!cap.ok) return res.json({ success: false, message: cap.message });
 
             const auto = getWeekAutoDates(activeYear, monthNum, weekNum);
             const effectiveDays = countBillableDaysExcludingOccasions(auto.start_date, auto.end_date, occasionSet);
             if (effectiveDays === 0) {
-                return res.json({
-                    success: false,
-                    message: 'جميع أيام هذا الموضع (أحد–خميس) تقع ضمن عطل/مناسبات مسجلة — لا يمكن احتساب إجازة هنا',
-                });
+                return res.json({ success: false, message: 'جميع أيام هذا الموضع (أحد–خميس) تقع ضمن عطل/مناسبات مسجلة — لا يمكن احتساب إجازة هنا' });
             }
+
             const remainingWeek = Math.max(0, maxDayCredits - usedWeekCredits);
             const fromWeek = Math.min(effectiveDays, remainingWeek);
             const needCarried = effectiveDays - fromWeek;
@@ -181,27 +235,25 @@ router.post('/submit-leave', requireAuth, (req, res) => {
                 });
             }
 
-            const tx = db.transaction(() => {
-                db.prepare(
-                    `INSERT INTO leaves (user_id, month_number, week_number, start_date, end_date, employee_note, year, status, leave_unit, days_count, carried_days_used)
-                     VALUES (?,?,?,?,?,?,?,'active',?,?,?)`
-                ).run(
-                    userId, monthNum, weekNum, auto.start_date, auto.end_date, employee_note || null, activeYear,
-                    'week', effectiveDays, needCarried
-                );
-                if (needCarried > 0) {
-                    db.prepare('UPDATE users SET carried_over_days = carried_over_days - ? WHERE id = ? AND carried_over_days >= ?').run(
-                        needCarried, userId, needCarried
-                    );
-                }
+            if (needCarried > 0) {
+                await User.updateOne({ _id: userId, carried_over_days: { $gte: needCarried } }, { $inc: { carried_over_days: -needCarried } });
+            }
+
+            await Leave.create({
+                user_id: userId,
+                month_number: monthNum,
+                week_number: weekNum,
+                start_date: auto.start_date,
+                end_date: auto.end_date,
+                employee_note: employee_note || null,
+                year: activeYear,
+                status: 'active',
+                leave_unit: 'week',
+                days_count: effectiveDays,
+                carried_days_used: needCarried,
             });
-            tx();
 
-            try {
-                db.prepare("INSERT INTO notifications (user_id, for_admin, type, message) VALUES (?,1,?,?)")
-                    .run(userId, 'leave', `${user.name} سجّل إجازة — شهر ${month_number} أسبوع ${week_number}`);
-            } catch (ne) {}
-
+            await Notification.create({ user_id: userId, for_admin: true, type: 'leave', message: `${user.name} سجّل إجازة — شهر ${month_number} أسبوع ${week_number}` });
             return res.json({ success: true, message: 'تم تسجيل الإجازة بنجاح ✓' });
         }
 
@@ -209,12 +261,10 @@ router.post('/submit-leave', requireAuth, (req, res) => {
         if (!trimmed) {
             return res.json({ success: false, message: 'الفترة لا تشمل أيام عمل (أحد–خميس) — الجمعة والسبت لا تُحتسب ضمن الإجازة' });
         }
+
         const billable = countBillableDaysExcludingOccasions(trimmed.start, trimmed.end, occasionSet);
         if (billable === 0) {
-            return res.json({
-                success: false,
-                message: 'لا توجد أيام تُحتسب — التواريخ إما عطل رسمية (مناسبات) أو جمعة/سبت فقط',
-            });
+            return res.json({ success: false, message: 'لا توجد أيام تُحتسب — التواريخ إما عطل رسمية (مناسبات) أو جمعة/سبت فقط' });
         }
 
         const ts = new Date(trimmed.start + 'T12:00:00');
@@ -239,276 +289,250 @@ router.post('/submit-leave', requireAuth, (req, res) => {
             const infS = inferMonthWeekFromDate(activeYear, trimmed.start);
             const infE = inferMonthWeekFromDate(activeYear, trimmed.end);
             if (!infS || !infE || infS.month_number !== infE.month_number || infS.week_number !== infE.week_number) {
-                return res.json({
-                    success: false,
-                    message: 'امتداد الإجازة يقطع أكثر من أسبوع عمل — سجّل طلبين أو اختر شهراً وأسبوعاً يغطيان الفترة',
-                });
+                return res.json({ success: false, message: 'امتداد الإجازة يقطع أكثر من أسبوع عمل — سجّل طلبين أو اختر شهراً وأسبوعاً يغطيان الفترة' });
             }
             monthNum = infS.month_number;
             weekNum = infS.week_number;
         }
 
-        const existing = db.prepare(
-            "SELECT id FROM leaves WHERE user_id=? AND month_number=? AND week_number=? AND status!='cancelled'"
-        ).get(userId, monthNum, weekNum);
-        if (existing) return res.json({ success: false, message: 'لديك إجازة مسجلة بالفعل لهذا الأسبوع' });
+        const ex2 = await ensureNoExisting(monthNum, weekNum);
+        if (!ex2.ok) return res.json({ success: false, message: ex2.message });
 
-        const blockedRow = db.prepare(
-            "SELECT reason FROM blocked_periods WHERE (type='week' AND year=? AND month_number=? AND week_number=?) OR (type='month' AND year=? AND month_number=?)"
-        ).get(activeYear, monthNum, weekNum, activeYear, monthNum);
-        if (blockedRow) {
-            const r = blockedRow.reason ? ` — ${blockedRow.reason}` : '';
-            return res.json({ success: false, message: `هذا الأسبوع محجوز من المسؤول (استثناء)${r}` });
-        }
+        const blk2 = await ensureNotBlocked(monthNum, weekNum);
+        if (!blk2.ok) return res.json({ success: false, message: blk2.message });
 
-        if (weekNum === 4 && !user.allow_week4) {
-            const hasPermission = db.prepare(
-                'SELECT id FROM week4_permissions WHERE user_id=? AND year=? AND month_number=?'
-            ).get(userId, activeYear, monthNum);
-            if (!hasPermission) return res.json({ success: false, message: 'فترة الرواتب (الموضع الرابع) محجوزة لهذا الشهر — اطلب فك الحجز لهذا الشهر فقط' });
-        }
+        const w42 = await ensureWeek4Allowed(monthNum, weekNum);
+        if (!w42.ok) return res.json({ success: false, message: w42.message });
 
-        const maxSetting = db.prepare("SELECT value FROM settings WHERE key='default_max_per_week'").get();
-        const defaultMax = maxSetting ? parseInt(maxSetting.value) : 3;
-        const capOverride = db.prepare(
-            'SELECT max_employees FROM week_capacity WHERE year=? AND month_number=? AND week_number=?'
-        ).get(activeYear, monthNum, weekNum);
-        const maxAllowed = capOverride ? capOverride.max_employees : defaultMax;
-        const currentCount = db.prepare(
-            "SELECT COUNT(*) as cnt FROM leaves WHERE month_number=? AND week_number=? AND status!='cancelled' AND user_id!=? AND (year=? OR year IS NULL)"
-        ).get(monthNum, weekNum, userId, activeYear).cnt;
-        if (currentCount >= maxAllowed) {
-            return res.json({ success: false, message: `الأسبوع ممتلئ (الحد الأقصى ${maxAllowed} موظفين)` });
-        }
+        const cap2 = await ensureCapacity(monthNum, weekNum);
+        if (!cap2.ok) return res.json({ success: false, message: cap2.message });
 
         const carried = user.carried_over_days || 0;
         const remainingWeek = Math.max(0, maxDayCredits - usedWeekCredits);
-        let leaveUnit;
-        let daysCount = billable;
-        let carriedUsed = 0;
+        if (billable > 5) return res.json({ success: false, message: 'لا يمكن تسجيل أكثر من خمسة أيام عمل في أسبوع نظامي واحد (أحد–خميس)' });
 
-        if (billable > 5) {
-            return res.json({ success: false, message: 'لا يمكن تسجيل أكثر من خمسة أيام عمل في أسبوع نظامي واحد (أحد–خميس)' });
-        }
+        let leaveUnit;
+        let carriedUsed = 0;
 
         if (billable <= remainingWeek) {
             leaveUnit = 'week';
-            daysCount = billable;
-            carriedUsed = 0;
         } else {
             const needCarried = billable - remainingWeek;
             if (needCarried > carried) {
-                return res.json({
-                    success: false,
-                    message: `لا يكفي الرصيد: من حصة الأسابيع متبقٍّ ${remainingWeek} يوم، والطلب يحتاج ${needCarried} يوماً من الرصيد المدور ولديك ${carried} يوم.`,
-                });
+                return res.json({ success: false, message: `لا يكفي الرصيد: من حصة الأسابيع متبقٍّ ${remainingWeek} يوم، والطلب يحتاج ${needCarried} يوماً من الرصيد المدور ولديك ${carried} يوم.` });
             }
             if (remainingWeek === 0) {
                 leaveUnit = 'day';
-                daysCount = billable;
-                carriedUsed = 0;
-                db.prepare('UPDATE users SET carried_over_days = carried_over_days - ? WHERE id = ? AND carried_over_days >= ?').run(
-                    billable, userId, billable
-                );
+                await User.updateOne({ _id: userId, carried_over_days: { $gte: billable } }, { $inc: { carried_over_days: -billable } });
             } else {
                 leaveUnit = 'week';
-                daysCount = billable;
                 carriedUsed = needCarried;
-                db.prepare('UPDATE users SET carried_over_days = carried_over_days - ? WHERE id = ? AND carried_over_days >= ?').run(
-                    needCarried, userId, needCarried
-                );
+                await User.updateOne({ _id: userId, carried_over_days: { $gte: needCarried } }, { $inc: { carried_over_days: -needCarried } });
             }
         }
 
-        db.prepare(
-            `INSERT INTO leaves (user_id, month_number, week_number, start_date, end_date, employee_note, year, status, leave_unit, days_count, carried_days_used)
-             VALUES (?,?,?,?,?,?,?,'active',?,?,?)`
-        ).run(userId, monthNum, weekNum, trimmed.start, trimmed.end, employee_note || null, activeYear, leaveUnit, daysCount, carriedUsed);
+        await Leave.create({
+            user_id: userId,
+            month_number: monthNum,
+            week_number: weekNum,
+            start_date: trimmed.start,
+            end_date: trimmed.end,
+            employee_note: employee_note || null,
+            year: activeYear,
+            status: 'active',
+            leave_unit: leaveUnit,
+            days_count: billable,
+            carried_days_used: carriedUsed,
+        });
 
-        try {
-            db.prepare("INSERT INTO notifications (user_id, for_admin, type, message) VALUES (?,1,?,?)")
-                .run(userId, 'leave', `${user.name} سجّل إجازة بالأيام — شهر ${monthNum} أسبوع ${weekNum}`);
-        } catch (ne) {}
-
+        await Notification.create({ user_id: userId, for_admin: true, type: 'leave', message: `${user.name} سجّل إجازة بالأيام — شهر ${monthNum} أسبوع ${weekNum}` });
         res.json({ success: true, message: 'تم تسجيل الإجازة بنجاح ✓' });
     } catch (e) {
         res.json({ success: false, message: e.message });
     }
 });
 
-router.post('/cancel-leave', requireAuth, (req, res) => {
+router.post('/cancel-leave', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
         const { leave_id } = req.body;
-        const leave = db.prepare('SELECT * FROM leaves WHERE id=? AND user_id=?').get(leave_id, userId);
+        const leave = await Leave.findOne({ _id: leave_id, user_id: userId }).lean();
         if (!leave) return res.json({ success: false, message: 'الإجازة غير موجودة' });
-        const tx = db.transaction(() => {
-            db.prepare("UPDATE leaves SET status='cancelled' WHERE id=?").run(leave_id);
-            const unit = leave.leave_unit || 'week';
-            if (unit === 'day') {
-                const back = parseInt(leave.days_count, 10) || 0;
-                if (back > 0) {
-                    db.prepare('UPDATE users SET carried_over_days = carried_over_days + ? WHERE id=?').run(back, userId);
-                }
-            } else {
-                const cd = parseInt(leave.carried_days_used, 10) || 0;
-                if (cd > 0) {
-                    db.prepare('UPDATE users SET carried_over_days = carried_over_days + ? WHERE id=?').run(cd, userId);
-                }
-            }
-        });
-        tx();
+        await Leave.updateOne({ _id: leave_id, user_id: userId }, { $set: { status: 'cancelled' } });
+        const unit = leave.leave_unit || 'week';
+        if (unit === 'day') {
+            const back = parseInt(leave.days_count, 10) || 0;
+            if (back > 0) await User.updateOne({ _id: userId }, { $inc: { carried_over_days: back } });
+        } else {
+            const cd = parseInt(leave.carried_days_used, 10) || 0;
+            if (cd > 0) await User.updateOne({ _id: userId }, { $inc: { carried_over_days: cd } });
+        }
         res.json({ success: true, message: 'تم إلغاء الإجازة' });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.post('/request-week4', requireAuth, (req, res) => {
+router.post('/request-week4', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
         const { reason, month_number } = req.body;
-        const activeYear = getActiveYearSetting();
+        const activeYear = await getActiveYearSetting();
         if (activeYear === null) return res.json({ success: false, message: 'لم يتم تعيين سنة نشطة — لا يمكن إرسال الطلب' });
         const monthNum = parseInt(month_number, 10);
         if (!monthNum || monthNum < 1 || monthNum > 12) return res.json({ success: false, message: 'اختر الشهر المطلوب لفك الحجز' });
-        const existing = db.prepare("SELECT id FROM week4_requests WHERE user_id=? AND month_number=? AND year=? AND status='pending'").get(userId, monthNum, activeYear);
+        const existing = await Week4Request.findOne({ user_id: userId, month_number: monthNum, year: activeYear, status: 'pending' }).lean();
         if (existing) return res.json({ success: false, message: 'لديك طلب معلق لهذا الشهر بالفعل' });
-        db.prepare("INSERT INTO week4_requests (user_id, month_number, year, reason, status) VALUES (?,?,?,?, 'pending')").run(userId, monthNum, activeYear, reason || '');
-        const user = db.prepare('SELECT name FROM users WHERE id=?').get(userId);
-        try {
-            db.prepare("INSERT INTO notifications (user_id, for_admin, type, message) VALUES (?,1,?,?)")
-                .run(userId, 'week4', `${user.name} طلب فك حجز فترة الرواتب لشهر ${monthNum}`);
-        } catch(ne) {}
+        await Week4Request.create({ user_id: userId, month_number: monthNum, year: activeYear, reason: reason || '', status: 'pending' });
+        const user = await User.findById(userId).lean();
+        await Notification.create({ user_id: userId, for_admin: true, type: 'week4', message: `${user?.name || ''} طلب فك حجز فترة الرواتب لشهر ${monthNum}` });
         res.json({ success: true, message: 'تم إرسال الطلب بنجاح — سيتم إشعارك بالرد' });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/my-week4-requests', requireAuth, (req, res) => {
+router.get('/my-week4-requests', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        const requests = db.prepare('SELECT * FROM week4_requests WHERE user_id=? ORDER BY created_at DESC').all(userId);
-        res.json({ success: true, requests });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+        const requests = await Week4Request.find({ user_id: userId }).sort({ created_at: -1 }).lean();
+        res.json({ success: true, requests: requests.map(r => ({ ...r, id: String(r._id) })) });
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.post('/request-swap', requireAuth, (req, res) => {
+router.post('/request-swap', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
         const { my_leave_id, target_leave_id, reason } = req.body;
-        const myLeave = db.prepare('SELECT * FROM leaves WHERE id=? AND user_id=?').get(my_leave_id, userId);
-        const targetLeave = db.prepare('SELECT * FROM leaves WHERE id=?').get(target_leave_id);
+        const myLeave = await Leave.findOne({ _id: my_leave_id, user_id: userId }).lean();
+        const targetLeave = await Leave.findById(target_leave_id).lean();
         if (!myLeave || !targetLeave) return res.json({ success: false, message: 'إجازة غير موجودة' });
-        const existing = db.prepare(
-            `SELECT id FROM swap_requests WHERE requester_id=? AND my_leave_id=?
-             AND status IN ('pending_peer','pending')`
-        ).get(userId, my_leave_id);
+        const existing = await SwapRequest.findOne({ requester_id: userId, my_leave_id, status: { $in: ['pending_peer', 'pending'] } }).lean();
         if (existing) return res.json({ success: false, message: 'لديك طلب تبديل معلق لهذه الإجازة' });
-        db.prepare(
-            "INSERT INTO swap_requests (requester_id, target_user_id, my_leave_id, their_leave_id, reason, target_status, status) VALUES (?,?,?,?,?, 'pending', 'pending_peer')"
-        ).run(userId, targetLeave.user_id, my_leave_id, target_leave_id, reason || '');
-        db.prepare('INSERT INTO notifications (user_id,message,type) VALUES (?,?,?)')
-            .run(targetLeave.user_id, 'لديك طلب تبديل جديد بانتظار موافقتك', 'swap_peer');
+        await SwapRequest.create({
+            requester_id: userId,
+            target_user_id: targetLeave.user_id,
+            my_leave_id,
+            their_leave_id: target_leave_id,
+            reason: reason || '',
+            target_status: 'pending',
+            status: 'pending_peer',
+        });
+        await Notification.create({ user_id: targetLeave.user_id, message: 'لديك طلب تبديل جديد بانتظار موافقتك', type: 'swap_peer' });
         res.json({ success: true, message: 'تم إرسال الطلب للطرف الآخر أولاً' });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/incoming-swap-requests', requireAuth, (req, res) => {
+router.get('/incoming-swap-requests', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        const requests = db.prepare(`
-            SELECT s.*, u.name as requester_name, u.employee_id as requester_emp,
-                   lm.month_number as req_month, lm.week_number as req_week,
-                   lt.month_number as tar_month, lt.week_number as tar_week
-            FROM swap_requests s
-            JOIN users u ON s.requester_id=u.id
-            JOIN leaves lm ON s.my_leave_id=lm.id
-            JOIN leaves lt ON s.their_leave_id=lt.id
-            WHERE s.target_user_id=? AND s.status='pending_peer'
-            ORDER BY s.created_at DESC
-        `).all(userId);
+        const raw = await SwapRequest.find({ target_user_id: userId, status: 'pending_peer' })
+            .populate('requester_id', 'name employee_id')
+            .populate('my_leave_id', 'month_number week_number')
+            .populate('their_leave_id', 'month_number week_number')
+            .sort({ created_at: -1 })
+            .lean();
+        const requests = raw.map((s) => ({
+            ...s,
+            id: String(s._id),
+            requester_name: s.requester_id?.name,
+            requester_emp: s.requester_id?.employee_id,
+            req_month: s.my_leave_id?.month_number,
+            req_week: s.my_leave_id?.week_number,
+            tar_month: s.their_leave_id?.month_number,
+            tar_week: s.their_leave_id?.week_number,
+        }));
         res.json({ success: true, requests });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.post('/swap-requests/respond', requireAuth, (req, res) => {
+router.post('/swap-requests/respond', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
         const { id, action, note } = req.body;
-        const swap = db.prepare('SELECT * FROM swap_requests WHERE id=? AND target_user_id=?').get(id, userId);
+        const swap = await SwapRequest.findOne({ _id: id, target_user_id: userId }).lean();
         if (!swap) return res.json({ success: false, message: 'الطلب غير موجود' });
         if (action === 'accept') {
-            db.prepare("UPDATE swap_requests SET target_status='accepted', target_note=?, status='pending' WHERE id=?").run(note || '', id);
-            db.prepare('INSERT INTO notifications (user_id,message,type) VALUES (?,?,?)').run(swap.requester_id, 'وافق الطرف الآخر على طلب التبديل وتم رفعه للمسؤول', 'swap_peer_ok');
+            await SwapRequest.updateOne({ _id: id, target_user_id: userId }, { $set: { target_status: 'accepted', target_note: note || '', status: 'pending' } });
+            await Notification.create({ user_id: swap.requester_id, message: 'وافق الطرف الآخر على طلب التبديل وتم رفعه للمسؤول', type: 'swap_peer_ok' });
             return res.json({ success: true, message: 'تمت الموافقة ورفع الطلب للمسؤول' });
         }
-        db.prepare("UPDATE swap_requests SET target_status='rejected', target_note=?, status='rejected' WHERE id=?").run(note || '', id);
-        db.prepare('INSERT INTO notifications (user_id,message,type) VALUES (?,?,?)').run(swap.requester_id, 'تم رفض طلب التبديل من الطرف الآخر', 'swap_peer_no');
+        await SwapRequest.updateOne({ _id: id, target_user_id: userId }, { $set: { target_status: 'rejected', target_note: note || '', status: 'rejected' } });
+        await Notification.create({ user_id: swap.requester_id, message: 'تم رفض طلب التبديل من الطرف الآخر', type: 'swap_peer_no' });
         res.json({ success: true, message: 'تم رفض الطلب' });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/leaves-by-employee/:employee_id', requireAuth, (req, res) => {
+router.get('/leaves-by-employee/:employee_id', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        const y = getActiveYearSetting();
+        const y = await getActiveYearSetting();
         if (y === null) return res.json({ success: false, message: 'لم تُعرَّف سنة نشطة' });
-        const target = db.prepare('SELECT id,name,employee_id FROM users WHERE employee_id=? AND is_admin=0').get(req.params.employee_id);
-        if (!target || target.id === userId) return res.json({ success: false, message: 'الموظف غير موجود' });
-        const leaves = db.prepare(
-            "SELECT * FROM leaves WHERE user_id=? AND status!='cancelled' AND (year=? OR year IS NULL) ORDER BY month_number,week_number"
-        ).all(target.id, y);
-        res.json({ success: true, target, leaves, activeYear: y });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+        const target = await User.findOne({ employee_id: req.params.employee_id, is_admin: false }).lean();
+        if (!target || String(target._id) === String(userId)) return res.json({ success: false, message: 'الموظف غير موجود' });
+        const leaves = await Leave.find({
+            user_id: target._id,
+            status: { $ne: 'cancelled' },
+            $or: [{ year: y }, { year: null }, { year: { $exists: false } }],
+        }).sort({ month_number: 1, week_number: 1 }).lean();
+        res.json({ success: true, target: { id: String(target._id), name: target.name, employee_id: target.employee_id }, leaves: leaves.map(l => ({ ...l, id: String(l._id) })), activeYear: y });
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/my-swap-requests', requireAuth, (req, res) => {
+router.get('/my-swap-requests', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        const requests = db.prepare(`
-      SELECT sr.*,
-        u1.name as requester_name, l1.month_number as req_month, l1.week_number as req_week,
-        u2.name as target_name, l2.month_number as tar_month, l2.week_number as tar_week
-      FROM swap_requests sr
-      JOIN users u1 ON sr.requester_id=u1.id
-      JOIN leaves l1 ON sr.my_leave_id=l1.id
-      JOIN leaves l2 ON sr.their_leave_id=l2.id
-      JOIN users u2 ON l2.user_id=u2.id
-      WHERE sr.requester_id=? OR l2.user_id=?
-      ORDER BY sr.created_at DESC
-    `).all(userId, userId);
+        const raw = await SwapRequest.find({ $or: [{ requester_id: userId }, { target_user_id: userId }] })
+            .populate('requester_id', 'name')
+            .populate({ path: 'my_leave_id', select: 'month_number week_number' })
+            .populate({ path: 'their_leave_id', select: 'month_number week_number user_id', populate: { path: 'user_id', select: 'name' } })
+            .sort({ created_at: -1 })
+            .lean();
+        const requests = raw.map((sr) => ({
+            ...sr,
+            id: String(sr._id),
+            requester_name: sr.requester_id?.name,
+            req_month: sr.my_leave_id?.month_number,
+            req_week: sr.my_leave_id?.week_number,
+            target_name: sr.their_leave_id?.user_id?.name,
+            tar_month: sr.their_leave_id?.month_number,
+            tar_week: sr.their_leave_id?.week_number,
+        }));
         res.json({ success: true, requests });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/all-leaves-for-swap', requireAuth, (req, res) => {
+router.get('/all-leaves-for-swap', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        const leaves = db.prepare(`
-      SELECT l.*, u.name, u.employee_id
-      FROM leaves l JOIN users u ON l.user_id=u.id
-      WHERE l.user_id!=? AND l.status!='cancelled' AND u.is_admin=0
-      ORDER BY l.month_number, l.week_number
-    `).all(userId);
+        const leavesRaw = await Leave.find({ user_id: { $ne: userId }, status: { $ne: 'cancelled' } })
+            .populate('user_id', 'name employee_id is_admin')
+            .sort({ month_number: 1, week_number: 1 })
+            .lean();
+        const leaves = leavesRaw
+            .filter(l => !l.user_id?.is_admin)
+            .map(l => ({
+                ...l,
+                id: String(l._id),
+                name: l.user_id?.name,
+                employee_id: l.user_id?.employee_id,
+                user_id: String(l.user_id?._id || l.user_id),
+            }));
         res.json({ success: true, leaves });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/occasions', requireAuth, (req, res) => {
+router.get('/occasions', requireAuth, async (req, res) => {
     try {
-        const occasions = db.prepare('SELECT * FROM occasions ORDER BY from_date').all();
-        res.json({ success: true, occasions });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+        const occasions = await Occasion.find({}).sort({ from_date: 1 }).lean();
+        res.json({ success: true, occasions: occasions.map(o => ({ ...o, id: String(o._id) })) });
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.get('/calendar-data', requireAuth, (req, res) => {
+router.get('/calendar-data', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        const y = getActiveYearSetting();
+        const y = await getActiveYearSetting();
         if (y === null) {
-            return res.json({
-                success: true, occasions: [], myLeaves: [], blocked: [], density: [], defaultMax: 3,
-                activeYear: null, noActiveYear: true
-            });
+            return res.json({ success: true, occasions: [], myLeaves: [], blocked: [], density: [], defaultMax: 3, activeYear: null, noActiveYear: true });
         }
+
         function occasionOverlapsYear(o) {
             if (!o.from_date) return false;
             const s = new Date(o.from_date);
@@ -517,32 +541,39 @@ router.get('/calendar-data', requireAuth, (req, res) => {
             const endY = new Date(y, 11, 31, 23, 59, 59);
             return s <= endY && e >= startY;
         }
-        const occasions = db.prepare('SELECT * FROM occasions ORDER BY from_date').all().filter(occasionOverlapsYear);
-        const myLeaves = db.prepare(
-            "SELECT * FROM leaves WHERE user_id=? AND status!='cancelled' AND (year=? OR year IS NULL)"
-        ).all(userId, y);
-        const blocked = db.prepare('SELECT * FROM blocked_periods WHERE year=? OR year IS NULL').all(y);
-        const density = db.prepare(`
-            SELECT month_number, week_number, COUNT(*) as cnt
-            FROM leaves WHERE status!='cancelled' AND (year=? OR year IS NULL)
-            GROUP BY month_number, week_number
-        `).all(y);
-        const maxSetting = db.prepare("SELECT value FROM settings WHERE key='default_max_per_week'").get();
+
+        const occasions = (await Occasion.find({}).sort({ from_date: 1 }).lean()).filter(occasionOverlapsYear);
+        const myLeaves = await Leave.find({ user_id: userId, status: { $ne: 'cancelled' }, $or: [{ year: y }, { year: null }, { year: { $exists: false } }] }).lean();
+        const blocked = await BlockedPeriod.find({ $or: [{ year: y }, { year: null }, { year: { $exists: false } }] }).lean();
+        const density = await Leave.aggregate([
+            { $match: { status: { $ne: 'cancelled' }, $or: [{ year: y }, { year: null }, { year: { $exists: false } }] } },
+            { $group: { _id: { month_number: '$month_number', week_number: '$week_number' }, cnt: { $sum: 1 } } },
+            { $project: { _id: 0, month_number: '$_id.month_number', week_number: '$_id.week_number', cnt: 1 } },
+        ]);
+        const maxSetting = await Setting.findOne({ key: 'default_max_per_week' }).lean();
         const defaultMax = maxSetting ? parseInt(maxSetting.value, 10) : 3;
-        res.json({ success: true, occasions, myLeaves, blocked, density, defaultMax, activeYear: y });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+        res.json({
+            success: true,
+            occasions: occasions.map(o => ({ ...o, id: String(o._id) })),
+            myLeaves: myLeaves.map(l => ({ ...l, id: String(l._id) })),
+            blocked: blocked.map(b => ({ ...b, id: String(b._id) })),
+            density,
+            defaultMax,
+            activeYear: y,
+        });
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.post('/change-password', requireAuth, (req, res) => {
+router.post('/change-password', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
         const { current_password, new_password } = req.body;
-        const user = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
-        if (!user || user.password !== current_password) return res.json({ success: false, message: 'كلمة المرور الحالية غير صحيحة' });
+        const user = await User.findById(userId).lean();
+        if (!user || String(user.password) !== String(current_password)) return res.json({ success: false, message: 'كلمة المرور الحالية غير صحيحة' });
         if (!new_password || String(new_password).trim().length < 4) return res.json({ success: false, message: 'كلمة المرور الجديدة قصيرة' });
-        db.prepare('UPDATE users SET password=? WHERE id=?').run(String(new_password).trim(), userId);
+        await User.updateOne({ _id: userId }, { $set: { password: String(new_password).trim() } });
         res.json({ success: true, message: 'تم تغيير كلمة المرور' });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
 function settingPath(rel) {
@@ -553,29 +584,25 @@ function settingPath(rel) {
     return fs.existsSync(full) ? full : null;
 }
 
-router.post('/profile/avatar', requireAuth, avatarUpload.single('avatar'), (req, res) => {
+router.post('/profile/avatar', requireAuth, avatarUpload.single('avatar'), async (req, res) => {
     try {
         if (!req.file) return res.json({ success: false, message: 'لم يتم اختيار ملف' });
         const url = '/uploads/avatars/' + req.file.filename;
-        db.prepare('UPDATE users SET avatar_url=? WHERE id=?').run(url, req.session.user.id);
+        await User.updateOne({ _id: req.session.user.id }, { $set: { avatar_url: url } });
         req.session.user.avatar_url = url;
         res.json({ success: true, avatar_url: url });
-    } catch (e) {
-        res.json({ success: false, message: e.message });
-    }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.post('/profile/theme', requireAuth, (req, res) => {
+router.post('/profile/theme', requireAuth, async (req, res) => {
     try {
         const { accent_color } = req.body;
         const hex = String(accent_color || '').trim();
         if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return res.json({ success: false, message: 'لون غير صالح (استخدم #RRGGBB)' });
-        db.prepare('UPDATE users SET accent_color=? WHERE id=?').run(hex, req.session.user.id);
+        await User.updateOne({ _id: req.session.user.id }, { $set: { accent_color: hex } });
         req.session.user.accent_color = hex;
         res.json({ success: true });
-    } catch (e) {
-        res.json({ success: false, message: e.message });
-    }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
 function escapeHtml(s) {
@@ -586,21 +613,21 @@ function escapeHtml(s) {
         .replace(/"/g, '&quot;');
 }
 
-router.get('/leave-report', requireAuth, (req, res) => {
+router.get('/leave-report', requireAuth, async (req, res) => {
     try {
         const lang = req.query.lang === 'en' ? 'en' : 'ar';
         const userId = req.session.user.id;
-        const user = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
-        const y = getActiveYearSetting();
+        const user = await User.findById(userId).lean();
+        const y = await getActiveYearSetting();
         if (y === null) {
             const msg = lang === 'en' ? 'No active year is set.' : 'لم يتم تعيين سنة نشطة.';
             return res.status(400).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report</title></head><body><p>${escapeHtml(msg)}</p></body></html>`);
         }
-        const logoRow = db.prepare("SELECT value FROM settings WHERE key='site_logo'").get();
+        const logoRow = await Setting.findOne({ key: 'site_logo' }).lean();
         const logoUrl = logoRow && logoRow.value ? String(logoRow.value).trim() : '';
-        const leaves = db.prepare(
-            "SELECT * FROM leaves WHERE user_id=? AND status!='cancelled' AND (year=? OR year IS NULL) ORDER BY month_number, week_number, start_date"
-        ).all(userId, y);
+        const leaves = await Leave.find({ user_id: userId, status: { $ne: 'cancelled' }, $or: [{ year: y }, { year: null }, { year: { $exists: false } }] })
+            .sort({ month_number: 1, week_number: 1, start_date: 1 })
+            .lean();
         const months = ['', 'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
         const monthsEn = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const L = lang === 'en'
@@ -655,9 +682,7 @@ router.get('/leave-report', requireAuth, (req, res) => {
                 <td>${l.status === 'cancelled' ? L.stCan : L.stReg}</td>
             </tr>`;
         }).join('');
-        const logoBlock = logoUrl
-            ? `<div class="logo-wrap"><img src="${escapeHtml(logoUrl)}" alt="Logo" class="logo-img"></div>`
-            : '';
+        const logoBlock = logoUrl ? `<div class="logo-wrap"><img src="${escapeHtml(logoUrl)}" alt="Logo" class="logo-img"></div>` : '';
         const dir = lang === 'en' ? 'ltr' : 'rtl';
         const align = lang === 'en' ? 'left' : 'right';
         const html = `<!DOCTYPE html>
@@ -721,16 +746,16 @@ router.get('/leave-report', requireAuth, (req, res) => {
 router.get('/export-my-leaves', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        const user = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
-        const y = getActiveYearSetting();
+        const user = await User.findById(userId).lean();
+        const y = await getActiveYearSetting();
         if (y === null) return res.json({ success: false, message: 'لم يتم تعيين سنة نشطة' });
-        const leaves = db.prepare(
-            "SELECT * FROM leaves WHERE user_id=? AND status!='cancelled' AND (year=? OR year IS NULL) ORDER BY month_number,week_number"
-        ).all(userId, y);
+        const leaves = await Leave.find({ user_id: userId, status: { $ne: 'cancelled' }, $or: [{ year: y }, { year: null }, { year: { $exists: false } }] })
+            .sort({ month_number: 1, week_number: 1 })
+            .lean();
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('اجازاتي');
         ws.views = [{ rightToLeft: true }];
-        const logoFull = settingPath((db.prepare("SELECT value FROM settings WHERE key='site_logo'").get() || {}).value || '');
+        const logoFull = settingPath((await Setting.findOne({ key: 'site_logo' }).lean())?.value || '');
         let logoRows = 0;
         if (logoFull) {
             const ext = path.extname(logoFull).slice(1).toLowerCase();
@@ -780,25 +805,22 @@ router.get('/export-my-leaves', requireAuth, async (req, res) => {
     }
 });
 
-router.get('/notifications', requireAuth, (req, res) => {
+router.get('/notifications', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        const notifications = db.prepare(
-            'SELECT * FROM notifications WHERE user_id=? AND for_admin=0 ORDER BY created_at DESC LIMIT 20'
-        ).all(userId);
-        const unread = db.prepare(
-            'SELECT COUNT(*) as cnt FROM notifications WHERE user_id=? AND for_admin=0 AND is_read=0'
-        ).get(userId).cnt;
-        res.json({ success: true, notifications, unread });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+        const notifications = await Notification.find({ user_id: userId, for_admin: false }).sort({ created_at: -1 }).limit(20).lean();
+        const unread = await Notification.countDocuments({ user_id: userId, for_admin: false, is_read: false });
+        res.json({ success: true, notifications: notifications.map(n => ({ ...n, id: String(n._id) })), unread });
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-router.post('/notifications/read-all', requireAuth, (req, res) => {
+router.post('/notifications/read-all', requireAuth, async (req, res) => {
     try {
         const userId = req.session.user.id;
-        db.prepare('UPDATE notifications SET is_read=1 WHERE user_id=? AND for_admin=0').run(userId);
+        await Notification.updateMany({ user_id: userId, for_admin: false }, { $set: { is_read: true } });
         res.json({ success: true });
-    } catch(e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
 module.exports = router;
+

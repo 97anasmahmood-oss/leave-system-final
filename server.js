@@ -2,25 +2,24 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
+const { connectMongo } = require('./database/mongo');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const SESSION_SECRET = process.env.SESSION_SECRET || 'leave-system-secret-2024';
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use(session({
-    secret: 'leave-system-secret-2024',
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// Create database folder if not exists
-if (!fs.existsSync('./database')) {
-    fs.mkdirSync('./database');
-}
+// Create uploads folders if not exists (branding/avatars only — DB is now external)
 ['public/uploads/branding', 'public/uploads/avatars'].forEach((p) => {
     if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 });
@@ -39,6 +38,17 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-app.listen(PORT, () => {
-    console.log('Server running at http://localhost:' + PORT);
-});
+async function start() {
+    try {
+        await connectMongo();
+        console.log('Connected to MongoDB successfully');
+        app.listen(PORT, () => {
+            console.log('Server running at http://localhost:' + PORT);
+        });
+    } catch (err) {
+        console.error('Failed to connect to MongoDB:', err.message);
+        process.exit(1);
+    }
+}
+
+start();
