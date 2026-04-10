@@ -1,4 +1,4 @@
-const { mongoose } = require('../database/mongo');
+const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
   employee_id: { type: String, unique: true, required: true },

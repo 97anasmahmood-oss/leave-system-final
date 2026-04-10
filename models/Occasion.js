@@ -1,4 +1,4 @@
-const { mongoose } = require('../database/mongo');
+const mongoose = require('mongoose');
 
 const occasionSchema = new mongoose.Schema({
   name: { type: String, required: true },

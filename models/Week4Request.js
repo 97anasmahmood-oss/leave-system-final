@@ -1,4 +1,4 @@
-const { mongoose } = require('../database/mongo');
+const mongoose = require('mongoose');
 
 const week4RequestSchema = new mongoose.Schema({
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

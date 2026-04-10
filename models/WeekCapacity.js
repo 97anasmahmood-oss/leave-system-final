@@ -1,4 +1,4 @@
-const { mongoose } = require('../database/mongo');
+const mongoose = require('mongoose');
 
 const weekCapacitySchema = new mongoose.Schema({
   year: Number,

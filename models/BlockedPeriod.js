@@ -1,4 +1,4 @@
-const { mongoose } = require('../database/mongo');
+const mongoose = require('mongoose');
 
 const blockedPeriodSchema = new mongoose.Schema({
   type: { type: String, default: 'week' },

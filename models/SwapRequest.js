@@ -1,4 +1,4 @@
-const { mongoose } = require('../database/mongo');
+const mongoose = require('mongoose');
 
 const swapRequestSchema = new mongoose.Schema({
   requester_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
