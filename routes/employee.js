@@ -141,6 +141,22 @@ router.post('/submit-leave', requireAuth, async (req, res) => {
         const user = await User.findById(userId).lean();
         if (!user) return res.json({ success: false, message: 'المستخدم غير موجود' });
 
+        const annualWeeks = Number.isFinite(parseInt(user.annual_leave_weeks, 10))
+            ? parseInt(user.annual_leave_weeks, 10)
+            : 3;
+        const maxLeaveEntries = Math.max(0, annualWeeks);
+        const usedLeaveEntries = await Leave.countDocuments({
+            user_id: userId,
+            status: { $ne: 'cancelled' },
+            $or: [{ year: activeYear }, { year: null }, { year: { $exists: false } }],
+        });
+        if (usedLeaveEntries >= maxLeaveEntries) {
+            return res.json({
+                success: false,
+                message: `استنفدت الحد المسموح لعدد الإجازات (${maxLeaveEntries}) لهذه السنة.`,
+            });
+        }
+
         const occasionSet = await loadOccasionDaySet();
         const maxDayCredits = (user.annual_leave_weeks || 0) * 5;
         const usedWeekCredits = await getUsedWeekDayCredits(userId, activeYear);
