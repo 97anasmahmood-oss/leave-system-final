@@ -46,6 +46,12 @@ function isAdmin(req, res, next) {
     res.status(403).json({ success: false, message: 'غير مصرح' });
 }
 
+function parseAllowWeek4(value) {
+    if (value === true || value === 1 || value === '1') return true;
+    if (typeof value === 'string' && value.trim().toLowerCase() === 'true') return true;
+    return false;
+}
+
 // ===== الموظفون =====
 router.get('/employees', isAdmin, async (req, res) => {
     const employees = await User.find({ is_admin: false }).sort({ name: 1 }).lean();
@@ -61,7 +67,7 @@ router.post('/employees/add', isAdmin, async (req, res) => {
             password,
             annual_leave_weeks: annual_leave_weeks || 3,
             carried_over_days: carried_over_days || 0,
-            allow_week4: !!allow_week4,
+            allow_week4: parseAllowWeek4(allow_week4),
             is_admin: false,
         });
         await Notification.create({ for_admin: true, message: `تم إضافة موظف جديد: ${name}`, type: 'info' });
@@ -80,7 +86,7 @@ router.post('/employees/update', isAdmin, async (req, res) => {
         name,
         annual_leave_weeks,
         carried_over_days: carried_over_days || 0,
-        allow_week4: !!allow_week4,
+        allow_week4: parseAllowWeek4(allow_week4),
     };
     if (password && String(password).trim() !== '') upd.password = password;
     await User.findByIdAndUpdate(id, { $set: upd });

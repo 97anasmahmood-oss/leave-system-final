@@ -640,9 +640,9 @@
         <td>${emp.allow_week4?'<span class="badge badge-success">مسموح</span>':'<span class="badge badge-danger">محجوز</span>'}</td>
         <td style="max-width:100px;font-size:11px;color:#888;">${emp.admin_notes?emp.admin_notes.substring(0,35)+(emp.admin_notes.length>35?'...':''):'-'}</td>
         <td><div style="display:flex;gap:3px;flex-wrap:wrap;">
-            <button class="btn btn-warning btn-sm" onclick="editEmployee(${emp.id},'${emp.employee_id}','${emp.name}',${emp.annual_leave_weeks},${emp.carried_over_days||0},${emp.allow_week4||0})">تعديل</button>
-            <button class="btn btn-info btn-sm" onclick="openNotesModal(${emp.id},\`${(emp.admin_notes||'').replace(/`/g,"'")}\`)">ملاحظات</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteEmployee(${emp.id})">حذف</button>
+            <button class="btn btn-warning btn-sm" onclick="editEmployee(${JSON.stringify(emp.id)},${JSON.stringify(emp.employee_id)},${JSON.stringify(emp.name)},${emp.annual_leave_weeks},${emp.carried_over_days||0},${emp.allow_week4||0})">تعديل</button>
+            <button class="btn btn-info btn-sm" onclick="openNotesModal(${JSON.stringify(emp.id)},${JSON.stringify(emp.admin_notes||'')})">ملاحظات</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteEmployee(${JSON.stringify(emp.id)})">حذف</button>
         </div></td>
     </tr>`).join('');
     }
@@ -707,8 +707,8 @@
         <td style="max-width:100px;font-size:11px;">${l.employee_note||'-'}</td>
         <td>${l.status==='cancelled'?`<span class="badge badge-danger">ملغاة</span>${l.cancel_reason?'<br><small style="font-size:10px;color:#999;">'+l.cancel_reason+'</small>':''}`:'<span class="badge badge-success">مسجلة</span>'}</td>
         <td><div style="display:flex;gap:3px;flex-wrap:wrap;">
-            ${l.status!=='cancelled'?`<button class="btn btn-warning btn-sm" onclick="openCancelModal(${l.id})">إلغاء</button>`:''}
-            <button class="btn btn-danger btn-sm" onclick="deleteLeave(${l.id})">حذف</button>
+            ${l.status!=='cancelled'?`<button class="btn btn-warning btn-sm" onclick="openCancelModal(${JSON.stringify(l.id)})">إلغاء</button>`:''}
+            <button class="btn btn-danger btn-sm" onclick="deleteLeave(${JSON.stringify(l.id)})">حذف</button>
         </div></td>
     </tr>`).join('');
     }
@@ -841,8 +841,8 @@
         <td>${new Date(r.created_at).toLocaleDateString('ar')}</td>
         <td>${sm[r.status]||r.status}${r.admin_note?'<br><small style="color:#888;font-size:10px;">'+r.admin_note+'</small>':''}</td>
         <td>${r.status==='pending'
-            ?`<button class="btn btn-success btn-sm" onclick="openWeek4Action(${r.id},'approve')">✅ موافقة</button> <button class="btn btn-danger btn-sm" onclick="openWeek4Action(${r.id},'reject')">❌ رفض</button>`
-            :`<button class="btn btn-danger btn-sm" onclick="deleteWeek4Request(${r.id})">🗑️ حذف</button>`}</td>
+            ?`<button class="btn btn-success btn-sm" onclick="openWeek4Action(${JSON.stringify(r.id)},'approve')">✅ موافقة</button> <button class="btn btn-danger btn-sm" onclick="openWeek4Action(${JSON.stringify(r.id)},'reject')">❌ رفض</button>`
+            :`<button class="btn btn-danger btn-sm" onclick="deleteWeek4Request(${JSON.stringify(r.id)})">🗑️ حذف</button>`}</td>
     </tr>`).join('');
     }
     async function deleteWeek4Request(id){
@@ -882,7 +882,7 @@
         <td>${monthNames[r.tar_month]||r.tar_month} — ${weekSlotLabel(r.tar_week)}</td>
         <td style="font-size:11px;">${r.reason||'-'}</td>
         <td>${sm[r.status]||r.status}${r.admin_note?'<br><small style="font-size:10px;color:#888;">'+r.admin_note+'</small>':''}</td>
-        <td>${r.status==='pending'?`<button class="btn btn-success btn-sm" onclick="openSwapAction(${r.id},'approve')">✅</button> <button class="btn btn-danger btn-sm" onclick="openSwapAction(${r.id},'reject')">❌</button>`:'-'}</td>
+        <td>${r.status==='pending'?`<button class="btn btn-success btn-sm" onclick="openSwapAction(${JSON.stringify(r.id)},'approve')">✅</button> <button class="btn btn-danger btn-sm" onclick="openSwapAction(${JSON.stringify(r.id)},'reject')">❌</button>`:'-'}</td>
     </tr>`).join('');
     }
     function openSwapAction(id,type){
@@ -929,7 +929,7 @@
         if(data.blocked.length===0){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:20px;">لا توجد استثناءات</td></tr>';return;}
         tbody.innerHTML=data.blocked.map(b=>{
             let details=b.type==='day'?`يوم: ${b.day_date}`:b.type==='week'?`${monthNames[b.month_number]} - ${weekSlotLabel(b.week_number)} - ${b.year}`:`${monthNames[b.month_number]} - ${b.year}`;
-            return `<tr><td>${b.type==='day'?'يوم':b.type==='week'?'أسبوع':'شهر'}</td><td>${details}</td><td>${b.reason||'-'}</td><td><button class="btn btn-danger btn-sm" onclick="deleteBlocked(${b.id})">حذف</button></td></tr>`;
+            return `<tr><td>${b.type==='day'?'يوم':b.type==='week'?'أسبوع':'شهر'}</td><td>${details}</td><td>${b.reason||'-'}</td><td><button class="btn btn-danger btn-sm" onclick="deleteBlocked(${JSON.stringify(b.id)})">حذف</button></td></tr>`;
         }).join('');
     }
     async function deleteBlocked(id){
@@ -959,7 +959,7 @@
         <td><span style="background:${o.color};color:white;padding:3px 10px;border-radius:5px;font-size:12px;">${o.name}</span></td>
         <td>${o.from_date}</td><td>${o.to_date||o.from_date}</td>
         <td>${o.type==='holiday'?'<span class="badge badge-info">عطلة رسمية</span>':'<span class="badge badge-warning">مناسبة</span>'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteOccasion(${o.id})">حذف</button></td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteOccasion(${JSON.stringify(o.id)})">حذف</button></td>
     </tr>`).join('');
     }
     async function deleteOccasion(id){
