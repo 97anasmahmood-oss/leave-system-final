@@ -151,10 +151,13 @@ router.post('/submit-leave', requireAuth, async (req, res) => {
             $or: [{ year: activeYear }, { year: null }, { year: { $exists: false } }],
         });
         if (usedLeaveEntries >= maxLeaveEntries) {
-            return res.json({
-                success: false,
-                message: `استنفدت الحد المسموح لعدد الإجازات (${maxLeaveEntries}) لهذه السنة.`,
-            });
+            const carriedAvail = user.carried_over_days || 0;
+            if (carriedAvail <= 0) {
+                return res.json({
+                    success: false,
+                    message: `استنفدت الحد المسموح لعدد الإجازات (${maxLeaveEntries}) لهذه السنة ولا يوجد رصيد مدور متاح.`,
+                });
+            }
         }
 
         const occasionSet = await loadOccasionDaySet();
