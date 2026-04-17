@@ -456,7 +456,7 @@ async function loadMyLeaves(){
         <td>${l.start_date||'-'}</td><td>${l.end_date||'-'}</td>
         <td>${(l.leave_unit||'week')==='day'?'يوم':'أسبوع'}</td>
         <td>${l.status==='cancelled'?'<span class="badge badge-danger">ملغاة</span>':'<span class="badge badge-success">مسجلة</span>'}</td>
-        <td>${l.status==='cancelled'?'-':`<button class="btn btn-danger btn-sm" onclick="cancelLeave(${JSON.stringify(l.id)})">إلغاء</button>`}</td>
+        <td>${l.status==='cancelled'?'-':`<button class="btn btn-danger btn-sm" onclick="cancelLeave('${l.id}')">إلغاء</button>`}</td>
     </tr>`).join('')}</tbody></table>`;
     loadHomeStats();
     renderAnalysis();
@@ -625,7 +625,7 @@ async function loadSwapData(){
     ${req.map(r=>`<tr><td>${monthNames[r.req_month]||r.req_month} — ${weekSlotLabel(r.req_week)}</td><td>${r.target_name||'-'} (${monthNames[r.tar_month]||r.tar_month} — ${weekSlotLabel(r.tar_week)})</td><td>${r.status}</td><td>${r.admin_note||'-'}</td></tr>`).join('')}
     </tbody></table>`:'<div style="padding:10px;color:#888;">لا توجد طلبات تبديل</div>';
     document.getElementById('incomingSwapList').innerHTML=incoming.length?`<table><thead><tr><th>من</th><th>التبديل</th><th>ملاحظة</th><th>إجراء</th></tr></thead><tbody>
-    ${incoming.map(r=>`<tr><td>${r.requester_name} (${r.requester_emp})</td><td>طلبه: ${monthNames[r.req_month]} ${weekSlotLabel(r.req_week)} ⇄ إجازتك: ${monthNames[r.tar_month]} ${weekSlotLabel(r.tar_week)}</td><td>${r.reason||'-'}</td><td><button class="btn btn-success btn-sm" onclick="respondSwap(${JSON.stringify(r.id)},'accept')">موافقة</button> <button class="btn btn-danger btn-sm" onclick="respondSwap(${JSON.stringify(r.id)},'reject')">رفض</button></td></tr>`).join('')}
+    ${incoming.map(r=>`<tr><td>${r.requester_name} (${r.requester_emp})</td><td>طلبه: ${monthNames[r.req_month]} ${weekSlotLabel(r.req_week)} ⇄ إجازتك: ${monthNames[r.tar_month]} ${weekSlotLabel(r.tar_week)}</td><td>${r.reason||'-'}</td><td><button class="btn btn-success btn-sm" onclick="respondSwap('${r.id}','accept')">موافقة</button> <button class="btn btn-danger btn-sm" onclick="respondSwap('${r.id}','reject')">رفض</button></td></tr>`).join('')}
     </tbody></table>`:'<div style="padding:10px;color:#888;">لا توجد طلبات واردة</div>';
 }
 async function loadTargetLeaves(){
