@@ -15,6 +15,7 @@ const Week4Permission = require('../models/Week4Permission');
 const Week4Request = require('../models/Week4Request');
 const SwapRequest = require('../models/SwapRequest');
 const Notification = require('../models/Notification');
+const mongoose = require('mongoose');
 
 const avDir = path.join(__dirname, '..', 'public', 'uploads', 'avatars');
 const avatarStorage = multer.diskStorage({
@@ -58,10 +59,11 @@ async function loadOccasionDaySet() {
 }
 
 async function getUsedWeekDayCredits(userId, year) {
+    const oid = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
     const rows = await Leave.aggregate([
         {
             $match: {
-                user_id: userId,
+                user_id: oid,
                 status: { $ne: 'cancelled' },
                 $and: [
                     { $or: [{ year }, { year: null }, { year: { $exists: false } }] },
@@ -80,6 +82,26 @@ async function getUsedWeekDayCredits(userId, year) {
                         ],
                     },
                 },
+            },
+        },
+    ]);
+    return rows[0]?.s || 0;
+}
+
+async function getUsedCarriedDayCredits(userId, year) {
+    const oid = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+    const rows = await Leave.aggregate([
+        {
+            $match: {
+                user_id: oid,
+                status: { $ne: 'cancelled' },
+                $or: [{ year }, { year: null }, { year: { $exists: false } }],
+            },
+        },
+        {
+            $group: {
+                _id: null,
+                s: { $sum: { $ifNull: ['$carried_days_used', 0] } },
             },
         },
     ]);
@@ -150,19 +172,19 @@ router.post('/submit-leave', requireAuth, async (req, res) => {
             status: { $ne: 'cancelled' },
             $or: [{ year: activeYear }, { year: null }, { year: { $exists: false } }],
         });
+        const occasionSet = await loadOccasionDaySet();
+        const maxDayCredits = (user.annual_leave_weeks || 0) * 5;
+        const usedWeekCredits = await getUsedWeekDayCredits(userId, activeYear);
+
         if (usedLeaveEntries >= maxLeaveEntries) {
-            const carriedAvail = user.carried_over_days || 0;
-            if (carriedAvail <= 0) {
+            // استنفد عدد أسابيعه — يمكن الإكمال فقط إذا بقي رصيد مدور كافٍ في قاعدة البيانات
+            if ((user.carried_over_days || 0) <= 0) {
                 return res.json({
                     success: false,
                     message: `استنفدت الحد المسموح لعدد الإجازات (${maxLeaveEntries}) لهذه السنة ولا يوجد رصيد مدور متاح.`,
                 });
             }
         }
-
-        const occasionSet = await loadOccasionDaySet();
-        const maxDayCredits = (user.annual_leave_weeks || 0) * 5;
-        const usedWeekCredits = await getUsedWeekDayCredits(userId, activeYear);
 
         const requestedDayMode = !!(start_date && end_date);
 
