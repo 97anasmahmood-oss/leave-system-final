@@ -839,4 +839,3 @@ router.post('/notifications/read-all', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
-
